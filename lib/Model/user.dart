@@ -7,14 +7,12 @@ class User {
   final String username;
   final String phoneno;
   final String password;
-  final String FCMToken;
   final String JWTToken;
   User({
     required this.id,
     required this.username,
     required this.phoneno,
     required this.password,
-    required this.FCMToken,
     required this.JWTToken,
   });
 
@@ -24,7 +22,6 @@ class User {
       'username': username,
       'phoneno': phoneno,
       'password': password,
-      'FCMToken' : FCMToken,
       'JWTToken' : JWTToken
     };
   }
@@ -35,7 +32,6 @@ class User {
       username: map['UserName'] ?? '',
       phoneno: map['PhoneNo'] ?? '',
       password: map['Password'] ?? '',
-      FCMToken: map['FCMToken'] ?? '',
       JWTToken: map['JWTToken'] ?? ''
     );
   }

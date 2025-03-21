@@ -32,8 +32,7 @@ class _SignUpPageState extends State<SignUpPage> {
       );
       return;
     }
-
-    authService.signUpUser(context: context, username: username, phoneno: mobile, password: password);
+    authService.signUpUser(context: context, username: username, mobile: mobile, password: password);
     _usernameController.clear();
     _mobileController.clear();
     _passwordController.clear();

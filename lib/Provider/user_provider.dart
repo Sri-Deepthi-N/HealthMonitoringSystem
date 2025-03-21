@@ -7,7 +7,6 @@ class UserProvider extends ChangeNotifier{
     username: '',
     phoneno: '',
     password: '',
-    FCMToken:'',
     JWTToken :'',
   );
 

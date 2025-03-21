@@ -31,18 +31,18 @@ const verifyToken = (req, res, next) => {
 //Signup
 app.post('/signup', async (req, res) => {
     try {
-        const { username, mobile, password } = req.body;
-        if (!username || !mobile || !password) {
+        const { username, phoneno, password } = req.body;
+        if (!username || !phoneno || !password) {
             return res.status(400).json({ msg: "All fields are required" });
         }
-        db.get(`SELECT * FROM users WHERE PhoneNo = ?`, [mobile], async (err, existingUser) => {
+        db.get(`SELECT * FROM users WHERE PhoneNo = ?`, [phoneno], async (err, existingUser) => {
             if (err) return res.status(500).json({ error: err.message });
             if (existingUser) return res.status(400).json({ msg: "User already exists" });
             const hashedPassword = await bcrypt.hash(password, 8);
-            const token = jwt.sign({ mobile }, JWT_SECRET);
+            const token = jwt.sign({ phoneno }, JWT_SECRET);
             db.run(
                 `INSERT INTO users (UserName, PhoneNo, Password, JWTToken) VALUES (?, ?, ?,?)`,
-                [username, mobile, hashedPassword, token],
+                [username, phoneno, hashedPassword, token],
                 function (err) {
                     if (err) return res.status(500).json({ error: err.message });
                     res.status(200).json('User registered successfully');
@@ -70,7 +70,7 @@ app.post('/login', (req, res) => {
             if (!match) {
                 return res.status(400).json({ msg: "Invalid credentials" });
             }
-            res.status(200).json({ msg: "Login successful", user });
+            res.status(200).json({user});
         });
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -96,7 +96,7 @@ app.post("/tokenIsValid", (req, res) => {
 });
 
 app.get("/", auth, async (req, res) => {
-    const userId = req.user.mobile;
+    const userId = req.user.phoneno;
     db.get("SELECT * FROM users WHERE PhoneNo = ?", [userId], (err, row) => {
       if (err) {
           return res.status(500).json({ error: "Database error" });

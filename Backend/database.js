@@ -1,6 +1,6 @@
 const sqlite3 = require('sqlite3').verbose();
 
-const db = new sqlite3.Database('./sql_databade.db', (err) => {
+const db = new sqlite3.Database('./sql_database.db', (err) => {
     if (err) {
         console.error('Error opening database', err.message);
     } else {
@@ -10,7 +10,6 @@ const db = new sqlite3.Database('./sql_databade.db', (err) => {
             UserName TEXT NOT NULL,
             PhoneNo TEXT UNIQUE NOT NULL,
             Password TEXT NOT NULL,
-            FCMToken TEXT NULL,
             JWTToken TEXT NULL
         )`);
 

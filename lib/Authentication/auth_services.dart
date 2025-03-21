@@ -16,16 +16,15 @@ class AuthService {
   void signUpUser({
     required BuildContext context,
     required String username,
-    required String phoneno,
+    required String mobile,
     required String password,
   }) async {
     try {
       User user = User(
         id: 0,
         username: username,
-        phoneno: phoneno,
+        phoneno: mobile,
         password: password,
-        FCMToken: '',
         JWTToken: '',
       );
 
@@ -60,7 +59,6 @@ class AuthService {
     try {
       var userProvider = Provider.of<UserProvider>(context, listen: false);
       final navigator = Navigator.of(context);
-
       http.Response res = await http.post(
         Uri.parse('${Constants.uri}/login'),
         body: jsonEncode({
@@ -79,7 +77,6 @@ class AuthService {
           SharedPreferences prefs = await SharedPreferences.getInstance();
           var responseBody = jsonDecode(res.body);
           String? token = responseBody['user']?['JWTToken'];
-
           if (token != null && token.isNotEmpty) {
             userProvider.setUser(res.body);
             await prefs.setString('x-auth-token', token);
@@ -98,12 +95,11 @@ class AuthService {
   }
 
   // get user data
-  void getUserData(BuildContext context) async {
+  Future<void> getUserData(BuildContext context) async {
     try {
       var userProvider = Provider.of<UserProvider>(context, listen: false);
       SharedPreferences prefs = await SharedPreferences.getInstance();
       String? token = prefs.getString('x-auth-token');
-
       if (token == null || token.isEmpty) {
         return;
       }
