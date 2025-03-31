@@ -81,8 +81,6 @@ class MedicalHistoryPageState extends State<MedicalHistoryPage> {
           setState(() {
             historyId = json.decode(response.body)["id"];
           });
-        }
-        else{
           _fetchHistory();
         }
         _showError("History saved successfully");

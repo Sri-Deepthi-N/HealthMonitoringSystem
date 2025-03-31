@@ -81,7 +81,7 @@ class AuthService {
             userProvider.setUser(res.body);
             await prefs.setString('x-auth-token', token);
             navigator.pushAndRemoveUntil(
-              MaterialPageRoute(builder: (context) => const HomePage()),
+              MaterialPageRoute(builder: (context) => HomePage()),
                   (route) => false,
             );
           } else {

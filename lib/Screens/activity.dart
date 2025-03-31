@@ -40,16 +40,18 @@ class HealthParametersPageState extends State<HealthParametersPage> {
 
   /// Function to format x-axis labels based on selected period
   Widget _getXAxisLabels(double value, TitleMeta meta) {
-    switch (_selectedPeriod) {
-      case 'Daily':
-        return Text("${value.toInt()}h"); // Time in hours
-      case 'Weekly':
-        return Text("${value.toInt()}"); // Day number
-      case 'Monthly':
-        return Text("Week ${value.toInt()}"); // Week number
-      default:
-        return Text(value.toInt().toString());
-    }
+    return Padding(
+      padding: const EdgeInsets.only(top: 10.0), // Add spacing
+      child: Text(
+        switch (_selectedPeriod) {
+          'Daily' => "${value.toInt()}h", // Time in hours
+          'Weekly' => "Day ${value.toInt()}", // Day number
+          'Monthly' => "Week ${value.toInt()}", // Week number
+          _ => value.toInt().toString(),
+        },
+        style: const TextStyle(fontSize: 12),
+      ),
+    );
   }
 
   @override
@@ -104,27 +106,77 @@ class HealthParametersPageState extends State<HealthParametersPage> {
                     border: Border.all(color: Colors.grey, width: 1), // Optional border
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  padding: const EdgeInsets.all(8.0),
-                  child: BarChart(
-                    BarChartData(
-                      titlesData: FlTitlesData(
-                        leftTitles: AxisTitles(
-                          sideTitles: SideTitles(showTitles: true),
-                        ),
-                        bottomTitles: AxisTitles(
-                          sideTitles: SideTitles(
-                            showTitles: true,
-                            getTitlesWidget: _getXAxisLabels, // Custom x-axis labels
+                  padding: const EdgeInsets.all(16.0), // Increased padding
+                  child: Column(
+                    children: [
+                      const Text(
+                        "Health Parameter Trends",
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      ),
+                      Expanded(
+                        child: BarChart(
+                          BarChartData(
+                            titlesData: FlTitlesData(
+                              leftTitles: AxisTitles(
+                                sideTitles: SideTitles(
+                                  showTitles: true,
+                                  reservedSize: 50, // More space for Y-axis labels
+                                  getTitlesWidget: (value, meta) => Padding(
+                                    padding: const EdgeInsets.only(right: 8.0), // Space from graph
+                                    child: Text(
+                                      value.toInt().toString(),
+                                      style: const TextStyle(fontSize: 12),
+                                    ),
+                                  ),
+                                ),
+                                axisNameWidget: const Padding(
+                                  padding: EdgeInsets.only(left: 10.0, bottom: 30.0), // More spacing
+                                  child: Text(
+                                    "Values",
+                                    style: TextStyle(
+                                        fontSize: 14, fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                              ),
+                              bottomTitles: AxisTitles(
+                                sideTitles: SideTitles(
+                                  showTitles: true,
+                                  reservedSize: 30, // More space for X-axis labels
+                                  getTitlesWidget: _getXAxisLabels,
+                                ),
+                                axisNameWidget: const Padding(
+                                  padding: EdgeInsets.only(top: 30.0), // More spacing
+                                  child: Text(
+                                    "Time",
+                                    style: TextStyle(
+                                        fontSize: 14, fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                              ),
+                              rightTitles: const AxisTitles(
+                                sideTitles: SideTitles(showTitles: false),
+                              ),
+                              topTitles: const AxisTitles(
+                                sideTitles: SideTitles(showTitles: false),
+                              ),
+                            ),
+                            barGroups: data[_selectedPeriod]!.map((e) {
+                              return BarChartGroupData(
+                                x: e.x.toInt(),
+                                barRods: [
+                                  BarChartRodData(
+                                    toY: e.y,
+                                    color: Colors.blue,
+                                    width: 12, // Adjust bar width for clarity
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                ],
+                              );
+                            }).toList(),
                           ),
                         ),
                       ),
-                      barGroups: data[_selectedPeriod]!.map((e) {
-                        return BarChartGroupData(
-                          x: e.x.toInt(),
-                          barRods: [BarChartRodData(toY: e.y, color: Colors.blue)],
-                        );
-                      }).toList(),
-                    ),
+                    ],
                   ),
                 ),
               ),

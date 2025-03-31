@@ -38,11 +38,11 @@ class _MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      home: Provider.of<UserProvider>(context).user.JWTToken.isEmpty ? const LoginPage() : const HomePage(),
+      home: Provider.of<UserProvider>(context).user.JWTToken.isEmpty ? const LoginPage() : HomePage(),
       routes: {
         '/login': (context) => const LoginPage(),
         '/signup': (context) => const SignUpPage(),
-        '/home': (context) => const HomePage(),
+        '/home': (context) => HomePage(),
       },
     );
   }
