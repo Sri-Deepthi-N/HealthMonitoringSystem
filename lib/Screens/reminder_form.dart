@@ -23,7 +23,7 @@ class ReminderFormPageState extends State<ReminderFormPage> {
       firstDate: DateTime(2000),
       lastDate: DateTime(2101),
     );
-    if (picked != null && picked != _selectedDate) {
+    if (picked != null) {
       setState(() {
         _selectedDate = picked;
       });
@@ -35,49 +35,50 @@ class ReminderFormPageState extends State<ReminderFormPage> {
       context: context,
       initialTime: TimeOfDay.now(),
     );
-    if (picked != null && picked != _selectedTime) {
+    if (picked != null) {
       setState(() {
         _selectedTime = picked;
       });
     }
   }
 
-  void _saveReminder() {
-    if (_activityController.text.isNotEmpty && _selectedDate != null && _selectedTime != null) {
-      String formattedDate = DateFormat('yyyy-MM-dd').format(_selectedDate!);
-      String formattedTime = _selectedTime!.format(context);
-
-      DateTime scheduledDateTime = DateTime(
-        _selectedDate!.year,
-        _selectedDate!.month,
-        _selectedDate!.day,
-        _selectedTime!.hour,
-        _selectedTime!.minute,
-      );
-
-      Map<String, dynamic> reminderData = {
-        "Activity": _activityController.text,
-        "Frequency": _selectedFrequency,
-        "ReminderNeeded": _selectedReminder,
-        "ReminderDate": formattedDate,
-        "ReminderTime": formattedTime,
-      };
-      if(_selectedReminder == "Needed"){
-        NotificationService.scheduleNotification(
-          id:0,
-          title: 'Reminder',
-          body: _activityController.text,
-          scheduledTime: scheduledDateTime,
-          repeatFrequency: _selectedFrequency,
-        );
-      }
-
-      Navigator.pop(context, reminderData);
-    } else {
+  void _saveReminder(){
+    if (_activityController.text.isEmpty || _selectedDate == null || _selectedTime == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Please complete all fields")),
       );
+      return;
     }
+
+    String formattedDate = DateFormat('yyyy-MM-dd').format(_selectedDate!);
+    String formattedTime = _selectedTime!.format(context);
+
+    DateTime scheduledDateTime = DateTime(
+      _selectedDate!.year,
+      _selectedDate!.month,
+      _selectedDate!.day,
+      _selectedTime!.hour,
+      _selectedTime!.minute,
+    );
+
+    final reminderData = {
+      "Activity": _activityController.text,
+      "Frequency": _selectedFrequency,
+      "ReminderNeeded": _selectedReminder,
+      "ReminderDate": formattedDate,
+      "ReminderTime": formattedTime,
+    };
+
+    if (_selectedReminder == "Needed") {
+      NotificationService.scheduleNotification(
+        id: DateTime.now().millisecondsSinceEpoch % 100000,
+        title: 'Reminder',
+        body: _activityController.text,
+        scheduledTime: scheduledDateTime,
+        repeatFrequency: _selectedFrequency,
+      );
+    }
+    Navigator.pop(context, reminderData);
   }
 
   Widget _buildRadioOption(String value) {
@@ -116,9 +117,7 @@ class ReminderFormPageState extends State<ReminderFormPage> {
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () {
-            Navigator.pop(context); // Back to previous page
-          },
+          onPressed: () => Navigator.pop(context),
         ),
         title: const Text("Reminder Form"),
         backgroundColor: Colors.pinkAccent,
@@ -163,18 +162,22 @@ class ReminderFormPageState extends State<ReminderFormPage> {
                 Expanded(
                   child: ElevatedButton(
                     onPressed: () => _pickDate(context),
-                    child: Text(_selectedDate == null
-                        ? "Pick Date"
-                        : DateFormat('yyyy-MM-dd').format(_selectedDate!)),
+                    child: Text(
+                      _selectedDate == null
+                          ? "Pick Date"
+                          : DateFormat('yyyy-MM-dd').format(_selectedDate!),
+                    ),
                   ),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: ElevatedButton(
                     onPressed: () => _pickTime(context),
-                    child: Text(_selectedTime == null
-                        ? "Pick Time"
-                        : _selectedTime!.format(context)),
+                    child: Text(
+                      _selectedTime == null
+                          ? "Pick Time"
+                          : _selectedTime!.format(context),
+                    ),
                   ),
                 ),
               ],
@@ -189,7 +192,6 @@ class ReminderFormPageState extends State<ReminderFormPage> {
                   padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 12),
                 ),
                 child: const Text("Save"),
-
               ),
             ),
           ],

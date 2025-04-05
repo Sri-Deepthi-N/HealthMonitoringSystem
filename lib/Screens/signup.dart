@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:health_management/Authentication/auth_services.dart';
+import 'package:health_management/Authentication/backend.dart';
+import 'package:health_management/Screens/login.dart';
 
 class SignUpPage extends StatefulWidget {
   const SignUpPage({super.key});
@@ -12,35 +13,57 @@ class _SignUpPageState extends State<SignUpPage> {
   final TextEditingController _mobileController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _confirmPasswordController = TextEditingController();
-  final AuthService authService = AuthService();
 
-  void _signup() {
-    String username = _usernameController.text;
-    String mobile = _mobileController.text;
-    String password = _passwordController.text;
-    String confirmPassword = _confirmPasswordController.text;
+  void _signup() async {
+    String username = _usernameController.text.trim();
+    String mobile = _mobileController.text.trim();
+    String password = _passwordController.text.trim();
+    String confirmPassword = _confirmPasswordController.text.trim();
 
     if (username.isEmpty || mobile.isEmpty || password.isEmpty || confirmPassword.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("All fields are required")),
-      );
+      _showMessage("All fields are required");
       return;
     }
+
     if (password != confirmPassword) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Passwords do not match")),
-      );
+      _showMessage("Passwords do not match");
       return;
     }
-    authService.signUpUser(context: context, username: username, mobile: mobile, password: password);
+    final existingUser = await DBHelper().getUserByMobile(mobile);
+    if (existingUser != null) {
+      _showMessage("Mobile number already registered");
+      return;
+    }
+    try{
+      await DBHelper().signup({
+        "UserName": username,
+        "PhoneNo": mobile,
+        "Password": password,
+      });
+      _showMessage("Sign up successful");
+    }catch(e){
+      _showMessage(e.toString());
+    }
+
     _usernameController.clear();
     _mobileController.clear();
     _passwordController.clear();
     _confirmPasswordController.clear();
+
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (context) => const LoginPage()),
+    );
   }
 
   void _cancel() {
     Navigator.pop(context);
+  }
+
+  void _showMessage(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg)),
+    );
   }
 
   @override
@@ -49,7 +72,7 @@ class _SignUpPageState extends State<SignUpPage> {
       backgroundColor: Colors.white,
       appBar: AppBar(
         title: const Text("Sign Up"),
-        backgroundColor: Colors.lightBlueAccent,
+        backgroundColor: Colors.pinkAccent,
         foregroundColor: Colors.white,
       ),
       body: Padding(
@@ -63,80 +86,45 @@ class _SignUpPageState extends State<SignUpPage> {
                 height: 100,
               ),
               const SizedBox(height: 20),
-              // Username Field
               TextField(
                 controller: _usernameController,
-                decoration: InputDecoration(
-                  labelText: "Username",
-                  prefixIcon: const Icon(Icons.person),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                ),
+                decoration: _inputDecoration("UserName", Icons.person),
               ),
               const SizedBox(height: 15),
-
-              // Mobile Number Field
               TextField(
                 controller: _mobileController,
                 keyboardType: TextInputType.phone,
-                decoration: InputDecoration(
-                  labelText: "Mobile Number",
-                  prefixIcon: const Icon(Icons.phone),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                ),
+                decoration: _inputDecoration("Mobile Number", Icons.phone),
               ),
               const SizedBox(height: 15),
-
-              // Password Field
               TextField(
                 controller: _passwordController,
                 obscureText: true,
-                decoration: InputDecoration(
-                  labelText: "Password",
-                  prefixIcon: const Icon(Icons.lock),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                ),
+                decoration: _inputDecoration("Password", Icons.lock),
               ),
               const SizedBox(height: 15),
-
-              // Confirm Password Field
               TextField(
                 controller: _confirmPasswordController,
                 obscureText: true,
-                decoration: InputDecoration(
-                  labelText: "Confirm Password",
-                  prefixIcon: const Icon(Icons.lock_outline),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                ),
+                decoration: _inputDecoration("Confirm Password", Icons.lock_outline),
               ),
               const SizedBox(height: 20),
-
-              // Sign Up & Cancel Buttons
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
                   ElevatedButton(
                     onPressed: _signup,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.lightBlueAccent,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
-                    ),
+                    style: _buttonStyle(Colors.pinkAccent),
                     child: const Text("Sign Up"),
                   ),
                   ElevatedButton(
                     onPressed: _cancel,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.grey,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
-                    ),
+                    style: _buttonStyle(Colors.grey),
                     child: const Text("Cancel"),
                   ),
                 ],
               ),
               const SizedBox(height: 15),
-
-              // Already have an account? Login
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -145,7 +133,7 @@ class _SignUpPageState extends State<SignUpPage> {
                     onPressed: () {
                       Navigator.pushReplacementNamed(context, "/login");
                     },
-                    child: const Text("Login", style: TextStyle(color: Colors.blue)),
+                    child: const Text("Login", style: TextStyle(color: Colors.pink)),
                   ),
                 ],
               ),
@@ -153,6 +141,22 @@ class _SignUpPageState extends State<SignUpPage> {
           ),
         ),
       ),
+    );
+  }
+
+  InputDecoration _inputDecoration(String label, IconData icon) {
+    return InputDecoration(
+      labelText: label,
+      prefixIcon: Icon(icon),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+    );
+  }
+
+  ButtonStyle _buttonStyle(Color color) {
+    return ElevatedButton.styleFrom(
+      backgroundColor: color,
+      foregroundColor: Colors.white,
+      padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
     );
   }
 }

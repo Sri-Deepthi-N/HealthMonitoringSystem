@@ -29,7 +29,7 @@ class ActivityMonitoringPageState extends State<ActivityMonitoringPage> {
         position.longitude,
       );
       Placemark place = placemarks[0];
-       setState(() {
+      setState(() {
         _address = [
           place.street,
           place.subLocality,
@@ -41,7 +41,7 @@ class ActivityMonitoringPageState extends State<ActivityMonitoringPage> {
         _isLoading = false;
       });
     } catch (e) {
-       setState(() {
+      setState(() {
         _address = "Error: $e";
         _isLoading = false;
       });
@@ -49,9 +49,9 @@ class ActivityMonitoringPageState extends State<ActivityMonitoringPage> {
   }
 
   @override
-  void didChangeDependencies() async {
-    super.didChangeDependencies();
-    await _getCurrentLocation();
+  void initState() {
+    super.initState();
+    _getCurrentLocation();
   }
 
   @override

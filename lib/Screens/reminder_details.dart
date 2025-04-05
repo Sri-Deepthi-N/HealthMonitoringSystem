@@ -1,11 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import 'package:health_management/Authentication/auth_services.dart';
+import 'package:health_management/Authentication/backend.dart';
 import 'package:health_management/Screens/home_page.dart';
-import 'dart:convert';
 import 'package:health_management/Screens/reminder_form.dart';
-import 'package:provider/provider.dart';
-import 'package:health_management/Provider/user_provider.dart';
-import 'package:health_management/Utils/constants.dart';
 
 class ReminderPage extends StatefulWidget {
   const ReminderPage({super.key});
@@ -15,54 +12,45 @@ class ReminderPage extends StatefulWidget {
 }
 
 class ReminderPageState extends State<ReminderPage> {
-  List<dynamic> reminders = [];
+  List<Map<String, dynamic>> reminders = [];
   int? userId;
 
   @override
-  void didChangeDependencies() {
+  void didChangeDependencies() async {
     super.didChangeDependencies();
-    final userProvider = Provider.of<UserProvider>(context, listen: false);
-    userId = userProvider.user.id;
+    final authService = AuthService();
+    final userInfo = await authService.getUserData();
+
+    if (userInfo != null) {
+      setState(() {
+        userId = userInfo['user_id'];
+      });
+    }
     if (userId != null) {
-      _fetchReminders();
+      _loadReminders();
+
     }
   }
 
-  Future<void> _fetchReminders() async {
-    try {
-      final response = await http.get(Uri.parse('${Constants.uri}/reminders/$userId'));
-      if (response.statusCode == 200) {
-        final List<dynamic> data = json.decode(response.body);
-        setState(() {
-          reminders = data.where((reminder) => reminder['user_id'] == userId).toList();
-        });
-      } else {
-        _showError("Failed to fetch reminders.");
-      }
-    } catch (e) {
-      _showError("Error fetching reminders: $e");
-    }
+  Future<void> _loadReminders() async {
+    if (userId == null) return;
+    final data = await DBHelper().getReminders(userId!);
+    setState(() {
+      reminders = data;
+    });
   }
 
   Future<void> _addReminder(Map<String, dynamic> newReminder) async {
-    try {
-      final response = await http.post(
-        Uri.parse('${Constants.uri}/reminders'),
-        headers: {"Content-Type": "application/json"},
-        body: json.encode({...newReminder,"user_id" : userId}),
-      );
-      if (response.statusCode == 200) {
-        _fetchReminders();
-        _showError("Reminder added successfully");
-      } else {
-        _showError("Failed to add reminder.");
-      }
-    } catch (e) {
-      _showError("Error adding reminder: $e");
-    }
+    await DBHelper().insertReminder(
+        {
+          ...newReminder,
+          'user_id': userId,
+        });
+    _loadReminders();
+    _showMessage("Reminder added successfully");
   }
 
-  void _showError(String message) {
+  void _showMessage(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message)),
     );
@@ -77,9 +65,7 @@ class ReminderPageState extends State<ReminderPage> {
           onPressed: () {
             Navigator.pushReplacement(
               context,
-              MaterialPageRoute(
-                builder: (context) => HomePage(),
-              ),
+              MaterialPageRoute(builder: (context) => const HomePage()),
             );
           },
         ),
@@ -97,7 +83,8 @@ class ReminderPageState extends State<ReminderPage> {
             margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             child: ListTile(
               title: Text(reminder['Activity']),
-              subtitle: Text("Frequency: ${reminder['Frequency']}\nTime: ${reminder['ReminderTime']}"),
+              subtitle: Text(
+                  "Frequency: ${reminder['Frequency']}\nTime: ${reminder['ReminderTime']}"),
             ),
           );
         },
@@ -109,7 +96,7 @@ class ReminderPageState extends State<ReminderPage> {
             MaterialPageRoute(builder: (context) => const ReminderFormPage()),
           );
 
-          if (newReminder != null ) {
+          if (newReminder != null) {
             _addReminder(newReminder);
           }
         },

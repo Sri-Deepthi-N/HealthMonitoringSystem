@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:health_management/Authentication/auth_services.dart';
 import 'package:health_management/Screens/medical_details.dart';
+import 'package:health_management/Authentication/backend.dart'; // For DBHelper
 
 class HealthDetailsFormPage extends StatefulWidget {
   const HealthDetailsFormPage({super.key});
@@ -10,12 +12,11 @@ class HealthDetailsFormPage extends StatefulWidget {
 
 class HealthDetailsFormPageState extends State<HealthDetailsFormPage> {
   final TextEditingController _conditionController = TextEditingController();
-  final TextEditingController _heightController = TextEditingController();
-  final TextEditingController _weightController = TextEditingController();
-  final TextEditingController _ageController = TextEditingController();
-
   List<String> selectedTreatments = [];
   List<String> selectedTablets = [];
+  List<String> existingMedicines = [];
+  String? selectedMedicine;
+  int? userId;
 
   final List<String> treatmentOptions = [
     "Surgery",
@@ -24,34 +25,44 @@ class HealthDetailsFormPageState extends State<HealthDetailsFormPage> {
     "Dialysis",
     "Other"
   ];
-  final List<String> tabletOptions = [
-    "Painkillers",
-    "Antibiotics",
-    "Insulin",
-    "Vitamin Supplements",
-    "Other"
-  ];
+
+  @override
+  void didChangeDependencies() async {
+    super.didChangeDependencies();
+    final authService = AuthService();
+    final userInfo = await authService.getUserData();
+
+    if (userInfo != null) {
+      setState(() {
+        userId = userInfo['user_id'];
+      });
+    }
+    if (userId != null) {
+      _loadExistingMedicines();
+    }
+  }
+
+  Future<void> _loadExistingMedicines() async {
+    final meds = await DBHelper().getMedicines(userId!);
+    setState(() {
+      existingMedicines =
+          meds.map<String>((e) => e['MedicineName'] as String).toSet().toList();
+    });
+  }
 
   Future<void> _saveHealthDetails() async {
-    if (_conditionController.text.isEmpty ||
-        _heightController.text.isEmpty ||
-        _weightController.text.isEmpty ||
-        _ageController.text.isEmpty) {
+    if (_conditionController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Please complete all fields")),
       );
       return;
     }
-
     Map<String, dynamic> healthData = {
       "Condition": _conditionController.text,
-      "Height": int.parse(_heightController.text),
-      "Weight": int.parse(_weightController.text),
-      "Age": int.parse(_ageController.text),
-      "Treatment": selectedTreatments.join(","), // Convert list to string
-      "Tablet": selectedTablets.join(","), // Convert list to string
+      "Treatment": selectedTreatments.join(","),
+      "Tablet": selectedTablets.join(","),
     };
-    Navigator.pop(context,healthData);
+    Navigator.pop(context, healthData);
   }
 
   @override
@@ -73,46 +84,98 @@ class HealthDetailsFormPageState extends State<HealthDetailsFormPage> {
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            _buildTextField("Medical Condition", _conditionController),
-            _buildTextField("Height (cm)", _heightController, isNumeric: true),
-            _buildTextField("Weight (kg)", _weightController, isNumeric: true),
-            _buildTextField("Age", _ageController, isNumeric: true),
-            _buildMultiSelectDropdown(
-                'Undergone Treatment For', selectedTreatments, treatmentOptions),
-            _buildMultiSelectDropdown(
-                'Consume Tablets For', selectedTablets, tabletOptions),
-            const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                ElevatedButton(
-                  onPressed: () {
-                    Navigator.pushReplacement(
-                      context,
-                      MaterialPageRoute(builder: (context) => const MedicalHistoryPage()),
-                    );
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.grey,
-                    foregroundColor: Colors.white,
+        child: SingleChildScrollView(
+          child: Column(
+            children: [
+              _buildTextField("Medical Condition", _conditionController),
+              _buildMultiSelectDropdown(
+                'Undergone Treatment For',
+                selectedTreatments,
+                treatmentOptions,
+              ),
+              _buildTabletInputSection(),
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  ElevatedButton(
+                    onPressed: () {
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(builder: (context) => const MedicalHistoryPage()),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.grey,
+                      foregroundColor: Colors.white,
+                    ),
+                    child: const Text('Cancel'),
                   ),
-                  child: const Text('Cancel'),
-                ),
-                ElevatedButton(
-                  onPressed: _saveHealthDetails,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.pinkAccent,
-                    foregroundColor: Colors.white,
+                  ElevatedButton(
+                    onPressed: _saveHealthDetails,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.pinkAccent,
+                      foregroundColor: Colors.white,
+                    ),
+                    child: const Text('Submit'),
                   ),
-                  child: const Text('Submit'),
-                ),
-              ],
-            ),
-          ],
+                ],
+              ),
+            ],
+          ),
         ),
       ),
+    );
+  }
+
+  Widget _buildTabletInputSection() {
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text("Consume Tablets For", style: TextStyle(fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+
+        // Show added tablets as Chips
+        Wrap(
+          spacing: 8,
+          children: selectedTablets.map((tablet) {
+            return Chip(
+              label: Text(tablet),
+              onDeleted: () {
+                setState(() {
+                  selectedTablets.remove(tablet);
+                });
+              },
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: 10),
+
+        // Dropdown for existing medicines
+        DropdownButtonFormField<String>(
+          value: selectedMedicine,
+          decoration: const InputDecoration(
+            labelText: "Select from existing medicines",
+            border: OutlineInputBorder(),
+          ),
+          items: existingMedicines.map((medicine) {
+            return DropdownMenuItem<String>(
+              value: medicine,
+              child: Text(medicine),
+            );
+          }).toList(),
+          onChanged: (value) {
+            if (value != null && !selectedTablets.contains(value)) {
+              setState(() {
+                selectedTablets.add(value);
+                selectedMedicine = null;
+              });
+            }
+          },
+        ),
+        const SizedBox(height: 10),
+      ],
     );
   }
 
@@ -124,7 +187,7 @@ class HealthDetailsFormPageState extends State<HealthDetailsFormPage> {
         keyboardType: isNumeric ? TextInputType.number : TextInputType.text,
         decoration: InputDecoration(
           labelText: label,
-          border: OutlineInputBorder(),
+          border: const OutlineInputBorder(),
         ),
       ),
     );
@@ -165,6 +228,7 @@ class HealthDetailsFormPageState extends State<HealthDetailsFormPage> {
                 DropdownButton<String>(
                   isExpanded: true,
                   hint: const Text("Select options"),
+                  value: null,
                   items: options.map((option) {
                     return DropdownMenuItem<String>(
                       value: option,

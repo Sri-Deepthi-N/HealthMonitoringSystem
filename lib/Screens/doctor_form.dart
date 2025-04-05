@@ -28,7 +28,7 @@ class DoctorFormPageState extends State<DoctorFormPage> {
         return;
       }
 
-      Map<String, String> doctor = {
+      Map<String, dynamic> doctor = {
         "DoctorName": nameController.text,
         "Gender": gender,
         "PhoneNo": mobileController.text,
@@ -41,6 +41,7 @@ class DoctorFormPageState extends State<DoctorFormPage> {
       Navigator.pop(context, doctor);
     }
   }
+
 
   void _cancelForm() {
     Navigator.pop(context);

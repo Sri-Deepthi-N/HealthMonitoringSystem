@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:health_management/Authentication/auth_services.dart';
+import 'package:health_management/Authentication/backend.dart';
+import 'package:health_management/Screens/home_page.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -10,17 +12,41 @@ class LoginPage extends StatefulWidget {
 class LoginPageState extends State<LoginPage> {
   final TextEditingController _mobileController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
-  final AuthService authService = AuthService();
 
-  void _login() {
+  void _login() async {
     String mobile = _mobileController.text.trim();
     String password = _passwordController.text.trim();
-    authService.signInUser(context: context, mobile: mobile, password: password);
+
+    if (mobile.isEmpty || password.isEmpty) {
+      _showMessage("Please enter mobile and password");
+      return;
+    }
+
+    final user = await DBHelper().getUserByMobile(mobile);
+    if (user != null && user['Password'] == password) {
+      // Save session in SharedPreferences
+      SharedPreferences prefs = await SharedPreferences.getInstance();
+      await prefs.setInt('user_id', user['id']);
+      await prefs.setString('UserName', user['UserName']);
+      await prefs.setString('PhoneNo', user['PhoneNo']);
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const HomePage()),
+      );
+    } else {
+      _showMessage("Invalid credentials");
+    }
   }
 
   void _cancel() {
     _mobileController.clear();
     _passwordController.clear();
+  }
+
+  void _showMessage(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg)),
+    );
   }
 
   @override
@@ -33,87 +59,49 @@ class LoginPageState extends State<LoginPage> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // App Logo
-              Image.asset(
-                'assets/logo.jpg', // Ensure the logo image is in assets folder
-                height: 100,
-              ),
+              Image.asset('assets/logo.jpg', height: 100),
               const SizedBox(height: 20),
-
-              // Username Field
               TextField(
                 controller: _mobileController,
                 keyboardType: TextInputType.phone,
-                decoration: InputDecoration(
-                  labelText: "Mobile Number",
-                  prefixIcon: const Icon(Icons.person),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
+                decoration: _inputDecoration("Mobile Number", Icons.person),
               ),
               const SizedBox(height: 15),
-
-              // Password Field
               TextField(
                 controller: _passwordController,
                 obscureText: true,
-                decoration: InputDecoration(
-                  labelText: "Password",
-                  prefixIcon: const Icon(Icons.lock),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
+                decoration: _inputDecoration("Password", Icons.lock),
               ),
               const SizedBox(height: 20),
-
-              // Login & Cancel Buttons
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
                   ElevatedButton(
                     onPressed: _login,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.lightBlueAccent,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 30, vertical: 15),
-                    ),
+                    style: _buttonStyle(Colors.pinkAccent),
                     child: const Text("Login"),
                   ),
                   ElevatedButton(
                     onPressed: _cancel,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.lightBlueAccent,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 30, vertical: 15),
-                    ),
+                    style: _buttonStyle(Colors.grey),
                     child: const Text("Cancel"),
                   ),
                 ],
               ),
               const SizedBox(height: 15),
-
-              // Forgot Password Link
               TextButton(
-                onPressed: () {
-                  // Add forgot password functionality
-                },
-                child: const Text("Forgot Password?", style: TextStyle(color: Colors.blue)),
+                onPressed: () {},
+                child: const Text("Forgot Password?", style: TextStyle(color: Colors.pink)),
               ),
-
-              // Sign-up Option
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   const Text("Don't have an account?"),
                   TextButton(
                     onPressed: () {
-                      Navigator.pushReplacementNamed(context,"/signup");
+                      Navigator.pushReplacementNamed(context, "/signup");
                     },
-                    child: const Text("Sign Up", style: TextStyle(color: Colors.blue)),
+                    child: const Text("Sign Up", style: TextStyle(color: Colors.pink)),
                   ),
                 ],
               ),
@@ -121,6 +109,22 @@ class LoginPageState extends State<LoginPage> {
           ),
         ),
       ),
+    );
+  }
+
+  InputDecoration _inputDecoration(String label, IconData icon) {
+    return InputDecoration(
+      labelText: label,
+      prefixIcon: Icon(icon),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+    );
+  }
+
+  ButtonStyle _buttonStyle(Color color) {
+    return ElevatedButton.styleFrom(
+      backgroundColor: color,
+      foregroundColor: Colors.white,
+      padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
     );
   }
 }

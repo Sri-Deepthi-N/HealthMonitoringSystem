@@ -1,10 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_reactive_ble/flutter_reactive_ble.dart';
+import 'package:health_management/Screens/watch_connection.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:provider/provider.dart';
 import 'package:health_management/Authentication/auth_services.dart';
-import 'package:health_management/Provider/user_provider.dart';
 import 'package:health_management/Screens/Reminder_details.dart';
 import 'package:health_management/Screens/activity.dart';
 import 'package:health_management/Screens/activity_monitoring.dart';
@@ -28,7 +27,7 @@ class _HomePageState extends State<HomePage> {
   List<DiscoveredDevice> devices = [];
   DiscoveredDevice? watch;
   String username = "user";
-  StreamSubscription<ConnectionStateUpdate>? _connectionSubscription;
+  //StreamSubscription<ConnectionStateUpdate>? _connectionSubscription;
 
   Map<String, String?> healthData = {
     "BP Level": null,
@@ -54,11 +53,39 @@ class _HomePageState extends State<HomePage> {
     super.didChangeDependencies();
     _requestPermissions();
     _checkExistingConnection();
-    final userProvider = Provider.of<UserProvider>(context);
-    setState(() {
-      username = userProvider.user.username;
-    });
+    _loadUserData();
   }
+
+  void _loadUserData() async {
+    final authService = AuthService();
+    final userInfo = await authService.getUserData();
+
+    if (userInfo != null) {
+      setState(() {
+        username = userInfo['UserName'] ?? 'User';
+        userId = userInfo['user_id']?.toString() ?? '';
+      });
+    }
+  }
+
+  String userId = "";
+
+
+  //final GoogleFitService _googleFitService = GoogleFitService();
+  // List<Map<String, dynamic>> _healthData = [];
+  //
+  // Future<void> _fetchData() async {
+  //   var healthData = await _googleFitService.fetchHealthData();
+  //   setState(() {
+  //     _healthData = healthData
+  //         .map((data) => {
+  //       'type': data.typeString,
+  //       'value': data.value.toString(),
+  //       'date': data.dateFrom.toString(),
+  //     })
+  //         .toList();
+  //   });
+  // }
 
   Future<void> _requestPermissions() async {
     await Permission.notification.request();
@@ -71,134 +98,144 @@ class _HomePageState extends State<HomePage> {
 
   void _checkExistingConnection() {
     if (watch != null) {
-      readDataFromDevice(watch!);
+      //readDataFromDevice(watch!);
     }
   }
 
-  void scanForDevices() {
-    setState(() {
-      devices = [];
-    });
-    flutterReactiveBle.scanForDevices(
-      withServices: [],
-      scanMode: ScanMode.lowLatency,
-    ).listen((device) {
-      if (!devices.any((d) => d.id == device.id)) {
-        setState(() {
-          _showDevicesPopup();
-          devices.add(device);
-        });
-      }
-    });
-  }
-
-  void _showDevicesPopup() {
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text("Available Devices"),
-          content: devices.isEmpty
-              ? const Text("No devices found. Try again.")
-              : SizedBox(
-            width: double.maxFinite,
-            child: ListView.builder(
-              shrinkWrap: true,
-              itemCount: devices.length,
-              itemBuilder: (context, index) {
-                final device = devices[index];
-                return ListTile(
-                  title: Text(device.name.isNotEmpty ? device.name : "Unknown Device"),
-                  onTap: () {
-                    connectToDevice(device);
-                    if(watch != null)  {
-                      Navigator.pop(context);
-                    }
-                  },
-                );
-              },
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text("Close"),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-
-  void connectToDevice(DiscoveredDevice device) {
-    _connectionSubscription?.cancel();
-    _connectionSubscription = flutterReactiveBle.connectToDevice(
-      id: device.id,
-      connectionTimeout: const Duration(seconds: 10),
-    ).listen((connectionState) {
-      if (connectionState.connectionState == DeviceConnectionState.connected) {
-        setState(() {
-          watch = device;
-        });
-        readDataFromDevice(device);
-      } else if (connectionState.connectionState == DeviceConnectionState.disconnected) {
-        Future.delayed(const Duration(seconds: 5), () {
-          if (watch != null) {
-            connectToDevice(watch!);
-          }
-        });
-      }
-    });
-  }
-
-  void disconnectDevice() {
-    if (_connectionSubscription != null) {
-      _connectionSubscription!.cancel();
-      _connectionSubscription = null;
-    }
-    if (watch != null) {
-      setState(() {
-        watch = null;
-      });
-    }
-  }
-
-  void readDataFromDevice(DiscoveredDevice device) async {
-    try {
-      List<DiscoveredService> services = await flutterReactiveBle.discoverServices(device.id);
-      print("🔍 Discovered Services:");
-
-      for (var service in services) {
-        print("📡 Service ID: ${service.serviceId}");
-
-        for (var characteristic in service.characteristics) {
-          print("➡️ Characteristic ID: ${characteristic.characteristicId}");
-
-          try {
-            final qualifiedCharacteristic = QualifiedCharacteristic(
-              characteristicId: characteristic.characteristicId,
-              serviceId: service.serviceId,
-              deviceId: device.id,
-            );
-
-            List<int> rawData = await flutterReactiveBle.readCharacteristic(qualifiedCharacteristic);
-
-            if (rawData.isNotEmpty) {
-              String receivedData = rawData.map((e) => e.toRadixString(16).padLeft(2, '0')).join(" ");
-              print("✅ Data from ${characteristic.characteristicId}: $receivedData");
-            } else {
-              print("⚠️ No data received from ${characteristic.characteristicId}");
-            }
-          } catch (e) {
-            print("❌ Error reading ${characteristic.characteristicId}: $e");
-          }
-        }
-      }
-    } catch (e) {
-      print("❌ Service Discovery Error: $e");
-    }
-  }
+  // void scanForDevices() {
+  //   setState(() {
+  //     devices = [];
+  //   });
+  //   final scanSubscription = flutterReactiveBle.scanForDevices(
+  //     withServices: [],
+  //     scanMode: ScanMode.lowLatency,
+  //   ).listen((device) {
+  //     if (!devices.any((d) => d.id == device.id) && device.name.isNotEmpty) {
+  //       setState(() {
+  //         devices.add(device);
+  //       });
+  //     }
+  //   });
+  //   Future.delayed(const Duration(seconds: 10), () {
+  //     scanSubscription.cancel(); // Stop scanning
+  //     _showDevicesPopup();
+  //   });
+  // }
+  //
+  // void _showDevicesPopup() {
+  //   if (devices.isEmpty) {
+  //     ScaffoldMessenger.of(context).showSnackBar(
+  //       const SnackBar(content: Text("No devices found. Try again.")),
+  //     );
+  //     return;
+  //   }
+  //
+  //   showDialog(
+  //     context: context,
+  //     builder: (context) {
+  //       return AlertDialog(
+  //         title: const Text("Available Devices"),
+  //         content: SizedBox(
+  //           width: double.maxFinite,
+  //           child: ListView.builder(
+  //             shrinkWrap: true,
+  //             itemCount: devices.length,
+  //             itemBuilder: (context, index) {
+  //               final device = devices[index];
+  //               return ListTile(
+  //                 title: Text(device.name),
+  //                 onTap: () {
+  //                   Navigator.pop(context); // Close popup before connecting
+  //                   connectToDevice(device);
+  //                 },
+  //               );
+  //             },
+  //           ),
+  //         ),
+  //         actions: [
+  //           TextButton(
+  //             onPressed: () => Navigator.pop(context),
+  //             child: const Text("Close"),
+  //           ),
+  //         ],
+  //       );
+  //     },
+  //   );
+  // }
+  //
+  // void connectToDevice(DiscoveredDevice device) {
+  //   _connectionSubscription?.cancel();
+  //   print("Devices $device");
+  //   _connectionSubscription = flutterReactiveBle.connectToDevice(
+  //     id: device.id,
+  //     connectionTimeout: const Duration(seconds: 10),
+  //   ).listen((connectionState) {
+  //     print("Devices $connectionState");
+  //     if (connectionState.connectionState == DeviceConnectionState.connected) {
+  //       setState(() {
+  //         watch = device;
+  //         print("Devices $connectionState");
+  //       });
+  //       readDataFromDevice(device);
+  //     } else if (connectionState.connectionState == DeviceConnectionState.disconnected) {
+  //       print("Device disconnected. Reconnect attempt in 5 seconds...");
+  //       Future.delayed(const Duration(seconds: 5), () {
+  //         if (watch != null) {
+  //           connectToDevice(watch!);
+  //         }
+  //       });
+  //     }
+  //   });
+  // }
+  //
+  //
+  // void disconnectDevice() {
+  //   if (_connectionSubscription != null) {
+  //     _connectionSubscription!.cancel();
+  //     _connectionSubscription = null;
+  //   }
+  //   if (watch != null) {
+  //     setState(() {
+  //       watch = null;
+  //     });
+  //   }
+  // }
+  //
+  // void readDataFromDevice(DiscoveredDevice device) async {
+  //   try {
+  //     List<DiscoveredService> services = await flutterReactiveBle.discoverServices(device.id);
+  //     print("🔍 Discovered Services:");
+  //
+  //     for (var service in services) {
+  //       print("📡 Service ID: ${service.serviceId}");
+  //
+  //       for (var characteristic in service.characteristics) {
+  //         print("➡️ Characteristic ID: ${characteristic.characteristicId}");
+  //
+  //         try {
+  //           final qualifiedCharacteristic = QualifiedCharacteristic(
+  //             characteristicId: characteristic.characteristicId,
+  //             serviceId: service.serviceId,
+  //             deviceId: device.id,
+  //           );
+  //
+  //           List<int> rawData = await flutterReactiveBle.readCharacteristic(qualifiedCharacteristic);
+  //
+  //           if (rawData.isNotEmpty) {
+  //             String receivedData = rawData.map((e) => e.toRadixString(16).padLeft(2, '0')).join(" ");
+  //             print("✅ Data from ${characteristic.characteristicId}: $receivedData");
+  //           } else {
+  //             print("⚠️ No data received from ${characteristic.characteristicId}");
+  //           }
+  //         } catch (e) {
+  //           print("❌ Error reading ${characteristic.characteristicId}: $e");
+  //         }
+  //       }
+  //     }
+  //   } catch (e) {
+  //     print("❌ Service Discovery Error: $e");
+  //   }
+  // }
 
 
   @override
@@ -217,15 +254,20 @@ class _HomePageState extends State<HomePage> {
         ),
         title: Text("Hi, $username!"),
         actions: [
-          if (watch != null)
-            IconButton(
-              icon: const Icon(Icons.watch_off, color: Colors.white),
-              onPressed: disconnectDevice,
-            ),
+          // if (watch != null)
+          //   IconButton(
+          //     icon: const Icon(Icons.watch_off, color: Colors.white),
+          //     onPressed: disconnectDevice,
+          //   ),
           if (watch == null)
           IconButton(
             icon: const Icon(Icons.watch_rounded, color: Colors.white),
-            onPressed: scanForDevices,
+            onPressed: (){
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (context) => Watch()),
+              );
+            },
           ),
           IconButton(
             icon: const Icon(Icons.location_on, color: Colors.white),
@@ -470,3 +512,191 @@ class _HomePageState extends State<HomePage> {
     );
   }
 }
+
+
+// 2
+//
+//
+// import 'dart:async';
+// import 'dart:convert';
+// import 'package:flutter/material.dart';
+// import 'package:flutter_reactive_ble/flutter_reactive_ble.dart';
+// import 'package:permission_handler/permission_handler.dart';
+//
+// class HomePage extends StatefulWidget {
+//   const HomePage({super.key});
+//
+//   @override
+//   State<HomePage> createState() => _HomePageState();
+// }
+//
+// class _HomePageState extends State<HomePage> {
+//   final flutterReactiveBle = FlutterReactiveBle();
+//   List<DiscoveredDevice> devices = [];
+//   DiscoveredDevice? watch;
+//   StreamSubscription<ConnectionStateUpdate>? _connectionSubscription;
+//   Map<String, String?> healthData = {};
+//
+//   @override
+//   void initState() {
+//     super.initState();
+//     _requestPermissions();
+//   }
+//
+//   Future<void> _requestPermissions() async {
+//     await Permission.bluetoothScan.request();
+//     await Permission.bluetoothConnect.request();
+//     await Permission.location.request();
+//   }
+//
+//   void scanForDevices() {
+//     setState(() {
+//       devices = [];
+//     });
+//
+//     final scanSubscription = flutterReactiveBle.scanForDevices(
+//       withServices: [],
+//       scanMode: ScanMode.lowLatency,
+//     ).listen((device) {
+//       if (!devices.any((d) => d.id == device.id) && device.name.isNotEmpty) {
+//         setState(() {
+//           devices.add(device);
+//         });
+//       }
+//     });
+//
+//     Future.delayed(const Duration(seconds: 10), () {
+//       scanSubscription.cancel();
+//       _showDevicesPopup();
+//     });
+//   }
+//
+//   void _showDevicesPopup() {
+//     if (devices.isEmpty) {
+//       ScaffoldMessenger.of(context).showSnackBar(
+//         const SnackBar(content: Text("No devices found. Try again.")),
+//       );
+//       return;
+//     }
+//
+//     showDialog(
+//       context: context,
+//       builder: (context) {
+//         return AlertDialog(
+//           title: const Text("Available Devices"),
+//           content: SizedBox(
+//             width: double.maxFinite,
+//             child: ListView.builder(
+//               shrinkWrap: true,
+//               itemCount: devices.length,
+//               itemBuilder: (context, index) {
+//                 final device = devices[index];
+//                 return ListTile(
+//                   title: Text(device.name),
+//                   onTap: () {
+//                     Navigator.pop(context);
+//                     connectToDevice(device);
+//                   },
+//                 );
+//               },
+//             ),
+//           ),
+//           actions: [
+//             TextButton(
+//               onPressed: () => Navigator.pop(context),
+//               child: const Text("Close"),
+//             ),
+//           ],
+//         );
+//       },
+//     );
+//   }
+//
+//   void connectToDevice(DiscoveredDevice device) {
+//     _connectionSubscription?.cancel();
+//
+//     _connectionSubscription = flutterReactiveBle.connectToDevice(
+//       id: device.id,
+//       connectionTimeout: const Duration(seconds: 10),
+//     ).listen((connectionState) {
+//       if (connectionState.connectionState == DeviceConnectionState.connected) {
+//         setState(() {
+//           watch = device;
+//         });
+//         discoverServices(device);
+//       } else if (connectionState.connectionState == DeviceConnectionState.disconnected) {
+//         print("Device disconnected. Reconnecting...");
+//         Future.delayed(const Duration(seconds: 5), () {
+//           connectToDevice(device);
+//         });
+//       }
+//     });
+//   }
+//
+//   void discoverServices(DiscoveredDevice device) async {
+//     try {
+//       List<DiscoveredService> services = await flutterReactiveBle.discoverServices(device.id);
+//       for (var service in services) {
+//         for (var characteristic in service.characteristics) {
+//           readCharacteristic(device.id, service.serviceId, characteristic.characteristicId);
+//         }
+//       }
+//     } catch (e) {
+//       print("Error discovering services: $e");
+//     }
+//   }
+//
+//   void readCharacteristic(String deviceId, Uuid serviceId, Uuid characteristicId) async {
+//     try {
+//       final qualifiedCharacteristic = QualifiedCharacteristic(
+//         characteristicId: characteristicId,
+//         serviceId: serviceId,
+//         deviceId: deviceId,
+//       );
+//
+//       List<int> rawData = await flutterReactiveBle.readCharacteristic(qualifiedCharacteristic);
+//       String hexData = rawData.map((e) => e.toRadixString(16).padLeft(2, '0')).join(" ");
+//       print("Raw Data: $hexData");
+//
+//       // Convert and store data
+//       String parsedData = _parseSmartwatchData(hexData);
+//       setState(() {
+//         healthData[characteristicId.toString()] = parsedData;
+//       });
+//     } catch (e) {
+//       print("Error reading characteristic: $e");
+//     }
+//   }
+//
+//   String _parseSmartwatchData(String hexData) {
+//     try {
+//       List<int> bytes = hexData.split(" ").map((e) => int.parse(e, radix: 16)).toList();
+//       return utf8.decode(bytes);
+//     } catch (e) {
+//       return "Unknown Data Format";
+//     }
+//   }
+//
+//   @override
+//   Widget build(BuildContext context) {
+//     return Scaffold(
+//       appBar: AppBar(
+//         title: const Text("Smartwatch Data"),
+//         actions: [
+//           IconButton(
+//             icon: const Icon(Icons.search),
+//             onPressed: scanForDevices,
+//           ),
+//         ],
+//       ),
+//       body: ListView(
+//         children: healthData.entries.map((entry) {
+//           return ListTile(
+//             title: Text(entry.key),
+//             subtitle: Text(entry.value ?? "No data"),
+//           );
+//         }).toList(),
+//       ),
+//     );
+//   }
+// }

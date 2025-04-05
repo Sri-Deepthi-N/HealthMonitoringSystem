@@ -1,11 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'package:health_management/Provider/user_provider.dart';
-import 'dart:convert';
+import 'package:health_management/Authentication/auth_services.dart';
+import 'package:health_management/Authentication/backend.dart';
 import 'package:health_management/Screens/doctor_form.dart';
 import 'package:health_management/Screens/home_page.dart';
-import 'package:provider/provider.dart';
-import 'package:health_management/Utils/constants.dart';
 
 class DoctorDetailsPage extends StatefulWidget {
   const DoctorDetailsPage({super.key});
@@ -19,10 +16,16 @@ class DoctorDetailsPageState extends State<DoctorDetailsPage> {
   int? userId;
 
   @override
-  void didChangeDependencies() {
+  void didChangeDependencies() async {
     super.didChangeDependencies();
-    final userProvider = Provider.of<UserProvider>(context, listen: false);
-    userId = userProvider.user.id;
+    final authService = AuthService();
+    final userInfo = await authService.getUserData();
+
+    if (userInfo != null) {
+      setState(() {
+        userId = userInfo['user_id'];
+      });
+    }
     if (userId != null) {
       _fetchDoctors();
     }
@@ -30,57 +33,31 @@ class DoctorDetailsPageState extends State<DoctorDetailsPage> {
 
   Future<void> _fetchDoctors() async {
     if (userId == null) return;
-    try {
-      final response = await http.get(Uri.parse('${Constants.uri}/doctor/$userId'));
-
-      if (response.statusCode == 200) {
-        setState(() {
-          doctors = List<Map<String, dynamic>>.from(json.decode(response.body));
-        });
-      } else {
-        _showError("Failed to load doctors");
-      }
-    } catch (e) {
-      _showError("Error: $e");
-    }
+    final dbHelper = DBHelper();
+    final data = await dbHelper.getDoctors(userId!);
+    setState(() {
+      doctors = data;
+    });
   }
 
   Future<void> _addDoctor(Map<String, dynamic> doctor) async {
     if (userId == null) return;
-    try {
-      final response = await http.post(
-        Uri.parse('${Constants.uri}/doctor'),
-        headers: {"Content-Type": "application/json"},
-        body: json.encode({...doctor, "user_id": userId}),
-      );
-      if (response.statusCode == 200) {
-        _fetchDoctors();
-      } else {
-        _showError("Failed to add doctor");
-      }
-    } catch (e) {
-      _showError("Error: $e");
-    }
+    final dbHelper = DBHelper();
+    await dbHelper.insertDoctor({...doctor, 'user_id': userId});
+    _showError("Doctor added successfully");
+    _fetchDoctors();
   }
 
   Future<void> _deleteDoctor(int id) async {
-    try {
-
-      final response = await http.delete(Uri.parse('${Constants.uri}/doctor/$id'));
-      if (response.statusCode == 200) {
-        _fetchDoctors();
-      } else {
-        _showError("Failed to delete doctor");
-      }
-    } catch (e) {
-      _showError("Error: $e");
-    }
+    final dbHelper = DBHelper();
+    await dbHelper.deleteDoctor(id);
+    _showError("Doctor deleted successfully");
+    _fetchDoctors();
   }
 
   void _showError(String message) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -94,7 +71,7 @@ class DoctorDetailsPageState extends State<DoctorDetailsPage> {
           onPressed: () {
             Navigator.pushReplacement(
               context,
-              MaterialPageRoute(builder: (context) => HomePage()),
+              MaterialPageRoute(builder: (context) => const HomePage()),
             );
           },
         ),

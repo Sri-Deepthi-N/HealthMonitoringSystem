@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'package:provider/provider.dart';
-import 'package:health_management/Provider/user_provider.dart';
-import 'dart:convert';
+import 'package:health_management/Authentication/Backend.dart';
+import 'package:health_management/Authentication/auth_services.dart';
 import 'package:health_management/Screens/medical_form.dart';
 import 'package:health_management/Screens/home_page.dart';
-import 'package:health_management/Utils/constants.dart';
+
 class MedicalHistoryPage extends StatefulWidget {
   const MedicalHistoryPage({super.key});
 
@@ -14,13 +12,10 @@ class MedicalHistoryPage extends StatefulWidget {
 }
 
 class MedicalHistoryPageState extends State<MedicalHistoryPage> {
-  Map<String, dynamic> medicalHistory={
-    "Condition" :"Nil",
-    "Height" : 0,
-    "Weight" : 0,
-    "Age" : 0,
-    "Treatment" :"Nil",
-    "Tablet" :"Nil",
+  Map<String, dynamic> medicalHistory = {
+    "Condition": "Nil",
+    "Treatment": "Nil",
+    "Tablet": "Nil",
   };
 
   int? userId;
@@ -29,70 +24,59 @@ class MedicalHistoryPageState extends State<MedicalHistoryPage> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final userProvider = Provider.of<UserProvider>(context, listen: false);
-    userId = userProvider.user.id;
-    if (userId != null) {
-      _fetchHistory();
+    _loadUserAndHistory();
+  }
+
+  Future<void> _loadUserAndHistory() async {
+    final authService = AuthService();
+    final userInfo = await authService.getUserData();
+    if (userInfo != null) {
+      userId = userInfo['user_id'];
+      await _fetchHistory();
     }
   }
 
   Future<void> _fetchHistory() async {
     if (userId == null) return;
-    try {
-      final response = await http.get(Uri.parse('${Constants.uri}/medicaldetails/$userId'));
 
-      if (response.statusCode == 200) {
-        final List<dynamic> history = json.decode(response.body);
-        if (history.isNotEmpty) {
-          setState(() {
-            historyId = history.first["id"];
-            medicalHistory = {
-              "Condition": history.first["Condition"],
-              "Height": history.first["Height"],
-              "Weight": history.first["Weight"],
-              "Age": history.first["Age"],
-              "Treatment": history.first["Treatment"],
-              "Tablet": history.first["Tablet"],
-            };
-          });
-        }
-      }
-    } catch (e) {
-      _showError("Error fetching history: $e");
+    final List<Map<String, dynamic>> historyList = await DBHelper().getMedicalDetails(userId!);
+    if (historyList.isNotEmpty) {
+      final data = historyList.first;
+      setState(() {
+        historyId = data["id"];
+        medicalHistory = {
+          "Condition": data["Condition"],
+          "Treatment": data["Treatment"],
+          "Tablet": data["Tablet"],
+        };
+      });
     }
   }
 
-  Future<void> _updateHistory(Map<String,dynamic> historyData) async {
+  Future<void> _updateHistory(Map<String, dynamic> historyData) async {
     if (userId == null) return;
-    try {
-      final response = historyId == null
-          ? await http.post(
-        Uri.parse('${Constants.uri}/medicaldetails'),
-        headers: {"Content-Type": "application/json"},
-        body: json.encode({...historyData, "user_id": userId}),
-      )
-          : await http.put(
-        Uri.parse('${Constants.uri}/medicaldetails/$historyId'),
-        headers: {"Content-Type": "application/json"},
-        body: json.encode(historyData),
-      );
-      if (response.statusCode == 200) {
-        if (historyId == null) {
-          setState(() {
-            historyId = json.decode(response.body)["id"];
-          });
-          _fetchHistory();
-        }
-        _showError("History saved successfully");
-      } else {
-        _showError("Failed to save history");
-      }
-    } catch (e) {
-      _showError("Error: $e");
+
+    final Map<String, dynamic> dataWithUser = {
+      "Condition": historyData["Condition"],
+      "Treatment": historyData["Treatment"],
+      "Tablet": historyData["Tablet"],
+      "user_id": userId,
+    };
+
+    if (historyId == null) {
+      int insertedId = await DBHelper().insertMedical(dataWithUser);
+      setState(() {
+        historyId = insertedId;
+      });
+    } else {
+      await DBHelper().updateMedical(historyId!, dataWithUser);
     }
+
+    _fetchHistory();
+    _showMessage("History saved successfully");
   }
 
-  void _showError(String message) {
+  void _showMessage(String message) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
@@ -108,9 +92,7 @@ class MedicalHistoryPageState extends State<MedicalHistoryPage> {
           onPressed: () {
             Navigator.pushReplacement(
               context,
-              MaterialPageRoute(
-                builder: (context) => HomePage(),
-              ),
+              MaterialPageRoute(builder: (context) => const HomePage()),
             );
           },
         ),
@@ -133,28 +115,55 @@ class MedicalHistoryPageState extends State<MedicalHistoryPage> {
         padding: const EdgeInsets.all(16.0),
         child: medicalHistory.isEmpty
             ? const Center(child: Text("No medical history added yet."))
-            : SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: DataTable(
-            columnSpacing: 20,
-            columns: const [
-              DataColumn(label: Text("Condition", style: TextStyle(fontWeight: FontWeight.bold))),
-              DataColumn(label: Text("Value", style: TextStyle(fontWeight: FontWeight.bold))),
-            ],
-            rows: medicalHistory.entries.map(
-                  (entry) {
-                return DataRow(
-                  cells: [
-                    DataCell(Text(entry.key)),
-                    DataCell(Text(entry.value.toString())),
+            : Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+              decoration: BoxDecoration(
+                color: Colors.pinkAccent.shade100,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: const [
+                  Expanded(
+                    flex: 2,
+                    child: Text("Condition", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  ),
+                  Expanded(
+                    flex: 3,
+                    child: Text("Value", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            ...medicalHistory.entries.map((entry) {
+              return Container(
+                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+                margin: const EdgeInsets.symmetric(vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.black26),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      flex: 2,
+                      child: Text(entry.key, style: const TextStyle(fontSize: 14)),
+                    ),
+                    Expanded(
+                      flex: 3,
+                      child: Text(entry.value.toString(), style: const TextStyle(fontSize: 14)),
+                    ),
                   ],
-                );
-              },
-            ).toList(),
-          ),
+                ),
+              );
+            }),
+          ],
         ),
       ),
-
     );
   }
 }

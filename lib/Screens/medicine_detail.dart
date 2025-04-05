@@ -1,11 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'package:health_management/Provider/user_provider.dart';
-import 'dart:convert';
+import 'package:health_management/Authentication/auth_services.dart';
+import 'package:health_management/Authentication/backend.dart';
 import 'package:health_management/Screens/medicine_form.dart';
 import 'package:health_management/Screens/home_page.dart';
-import 'package:provider/provider.dart';
-import 'package:health_management/Utils/constants.dart';
 
 class MedicineDetailsPage extends StatefulWidget {
   const MedicineDetailsPage({super.key});
@@ -19,10 +16,15 @@ class MedicineDetailsPageState extends State<MedicineDetailsPage> {
   int? userId;
 
   @override
-  void didChangeDependencies() {
+  void didChangeDependencies() async {
     super.didChangeDependencies();
-    final userProvider = Provider.of<UserProvider>(context, listen: false);
-    userId = userProvider.user.id;
+    final authService = AuthService();
+    final userInfo = await authService.getUserData();
+    if (userInfo != null) {
+      setState(() {
+        userId = userInfo['user_id'];
+      });
+    }
     if (userId != null) {
       _fetchMedicines();
     }
@@ -30,55 +32,31 @@ class MedicineDetailsPageState extends State<MedicineDetailsPage> {
 
   Future<void> _fetchMedicines() async {
     if (userId == null) return;
-    try {
-      final response = await http.get(Uri.parse('${Constants.uri}/medicine/$userId'));
-
-      if (response.statusCode == 200) {
-        setState(() {
-          medicines = List<Map<String, dynamic>>.from(json.decode(response.body));
-        });
-      } else {
-        _showError("Failed to load medicines");
-      }
-    } catch (e) {
-      _showError("Error: $e");
-    }
+    final data = await DBHelper().getMedicines(userId!);
+    setState(() {
+      medicines = data;
+    });
   }
 
   Future<void> _addMedicine(Map<String, dynamic> medicine) async {
-    if (userId == null) return;
-    try {
-      final response = await http.post(
-        Uri.parse('${Constants.uri}/medicine'),
-        headers: {"Content-Type": "application/json"},
-        body: json.encode({...medicine, "user_id": userId}),
-      );
-      if (response.statusCode == 200) {
-        _fetchMedicines();
-      } else {
-        _showError("Failed to add medicine");
-      }
-    } catch (e) {
-      _showError("Error: $e");
-    }
+    await DBHelper().insertMedicine({
+      ...medicine,
+      'user_id': userId,
+    });
+    _showError("Medicine added successfully");
+    _fetchMedicines();
   }
 
   Future<void> _deleteMedicine(int id) async {
-    try {
-      final response = await http.delete(Uri.parse('${Constants.uri}/medicine/$id'));
-      if (response.statusCode == 200) {
-        _fetchMedicines();
-      } else {
-        _showError("Failed to delete medicine");
-      }
-    } catch (e) {
-      _showError("Error: $e");
-    }
+    await DBHelper().deleteMedicine(id);
+    _showError("Medicine deleted successfully");
+    _fetchMedicines();
   }
 
   void _showError(String message) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -91,9 +69,7 @@ class MedicineDetailsPageState extends State<MedicineDetailsPage> {
           onPressed: () {
             Navigator.pushReplacement(
               context,
-              MaterialPageRoute(
-                builder: (context) => HomePage(),
-              ),
+              MaterialPageRoute(builder: (context) => const HomePage()),
             );
           },
         ),
@@ -101,10 +77,7 @@ class MedicineDetailsPageState extends State<MedicineDetailsPage> {
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: medicines.isEmpty
-            ? const Center(
-          child: Text("No medicines added yet.",
-              style: TextStyle(fontSize: 16)),
-        )
+            ? const Center(child: Text("No medicines added yet.", style: TextStyle(fontSize: 16)))
             : Scrollbar(
           thumbVisibility: true,
           thickness: 6,
@@ -127,35 +100,28 @@ class MedicineDetailsPageState extends State<MedicineDetailsPage> {
                         children: [
                           Text(
                             medicine["MedicineName"],
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
+                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                           ),
                           IconButton(
                             icon: const Icon(Icons.delete, color: Colors.red),
-                            onPressed: () {
-                              _deleteMedicine(medicine["id"]);
-                            },
+                            onPressed: () => _deleteMedicine(medicine["id"]),
                           ),
                         ],
                       ),
                       const SizedBox(height: 5),
                       Row(
                         children: [
-                          const Icon(Icons.access_time,
-                              size: 18, color: Colors.black),
+                          const Icon(Icons.access_time, size: 18, color: Colors.black),
                           const SizedBox(width: 5),
                           Text(
-                            "Intake: ${medicine["Morning"] == 1? "Morning," : ""} ${medicine["Afternoon"] == 1? "Afternoon," : ""} ${medicine["Evening"] == 1? "Evening," : ""} ${medicine["Night"] == 1? "Night" : ""}",
+                            "Intake: ${medicine["Morning"] == 1 ? "Morning, " : ""}${medicine["Afternoon"] == 1 ? "Afternoon, " : ""}${medicine["Evening"] == 1 ? "Evening, " : ""}${medicine["Night"] == 1 ? "Night" : ""}",
                             style: const TextStyle(fontSize: 14),
                           ),
                         ],
                       ),
                       Row(
                         children: [
-                          const Icon(Icons.restaurant,
-                              size: 18, color: Colors.black),
+                          const Icon(Icons.restaurant, size: 18, color: Colors.black),
                           const SizedBox(width: 5),
                           Text(
                             "Food: ${medicine["IntakeTime"]}",
@@ -175,11 +141,8 @@ class MedicineDetailsPageState extends State<MedicineDetailsPage> {
         onPressed: () async {
           final result = await Navigator.push(
             context,
-            MaterialPageRoute(
-              builder: (context) => const MedicineFormPage(),
-            ),
+            MaterialPageRoute(builder: (context) => const MedicineFormPage()),
           );
-
           if (result != null) {
             _addMedicine(result);
           }

@@ -1,10 +1,7 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'package:provider/provider.dart';
-import 'package:health_management/Provider/user_provider.dart';
+import 'package:health_management/Authentication/auth_services.dart';
+import 'package:health_management/Authentication/backend.dart';
 import 'package:health_management/Screens/home_page.dart';
-import 'package:health_management/Utils/constants.dart';
 
 class FamilyDetailsPage extends StatefulWidget {
   const FamilyDetailsPage({super.key});
@@ -16,74 +13,45 @@ class FamilyDetailsPage extends StatefulWidget {
 class FamilyDetailsPageState extends State<FamilyDetailsPage> {
   List<Map<String, dynamic>> familyMembers = [];
   int? userId;
+
   @override
-  void didChangeDependencies() {
+  void didChangeDependencies() async {
     super.didChangeDependencies();
-    final userProvider = Provider.of<UserProvider>(context, listen: false);
-    userId = userProvider.user.id;
+    final authService = AuthService();
+    final userInfo = await authService.getUserData();
+    if (userInfo != null) {
+      setState(() {
+        userId = userInfo['user_id'];
+      });
+    }
     _fetchFamilyMembers();
   }
 
   Future<void> _fetchFamilyMembers() async {
-    try {
-      final response = await http.get(
-        Uri.parse('${Constants.uri}/family/$userId'),
-      );
-      if (response.statusCode == 200) {
-        setState(() {
-          familyMembers = List<Map<String, dynamic>>.from(json.decode(response.body));
-        });
-      } else {
-        _showError("Failed to load data");
-      }
-    } catch (e) {
-      _showError("Error: $e");
-    }
+    if (userId == null) return;
+    final data = await DBHelper().getFamily(userId!);
+    setState(() {
+      familyMembers = data;
+    });
   }
 
-  // Add a new family member
   Future<void> _addFamilyMember(String name, String mobile, String relation) async {
-    if (userId == null) {
-      _showError("Error: User ID is missing. Please log in again.");
-      return;
-    }
-
-    try {
-      final response = await http.post(
-        Uri.parse('${Constants.uri}/family'),
-        headers: {"Content-Type": "application/json"},
-        body: json.encode({
-          "user_id": userId, // Ensure it's not null
-          "Name": name,
-          "PhoneNo": mobile,
-          "Relation": relation
-        }),
-      );
-
-      if (response.statusCode == 200) {
-        _fetchFamilyMembers();
-      } else {
-        _showError("Failed to add member");
-      }
-    } catch (e) {
-      _showError("Error: $e");
-    }
+    if (userId == null) return;
+    final newMember = {
+      "user_id": userId,
+      "Name": name,
+      "PhoneNo": mobile,
+      "Relation": relation
+    };
+    await DBHelper().insertFamily(newMember);
+    _showError("Family details added successfully");
+    _fetchFamilyMembers();
   }
-
 
   Future<void> _deleteFamilyMember(int id) async {
-    try {
-      final response = await http.delete(
-        Uri.parse('${Constants.uri}/family/$id'),
-      );
-      if (response.statusCode == 200) {
-        _fetchFamilyMembers();
-      } else {
-        _showError("Failed to delete member");
-      }
-    } catch (e) {
-      _showError("Error: $e");
-    }
+    await DBHelper().deleteFamily(id);
+    _showError("Family details deleted successfully");
+    _fetchFamilyMembers();
   }
 
   void _showError(String message) {
@@ -120,9 +88,7 @@ class FamilyDetailsPageState extends State<FamilyDetailsPage> {
           ),
           actions: [
             TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-              },
+              onPressed: () => Navigator.pop(context),
               child: const Text("Cancel"),
             ),
             ElevatedButton(
@@ -158,10 +124,8 @@ class FamilyDetailsPageState extends State<FamilyDetailsPage> {
           onPressed: () {
             Navigator.pushReplacement(
               context,
-              MaterialPageRoute(
-                builder: (context) => HomePage(),
-              ),
-            );// Navigate to previous page
+              MaterialPageRoute(builder: (context) => const HomePage()),
+            );
           },
         ),
       ),
@@ -182,13 +146,12 @@ class FamilyDetailsPageState extends State<FamilyDetailsPage> {
             ],
             rows: familyMembers.map((member) {
               return DataRow(
-                color: WidgetStateProperty.resolveWith<Color?>((Set<WidgetState> states) {
-                  return familyMembers.indexOf(member) % 2 == 0 ? Colors.pink.shade50 : null;
-                }),
+                color: WidgetStateProperty.resolveWith<Color?>(
+                        (Set<WidgetState> states) => familyMembers.indexOf(member) % 2 == 0 ? Colors.pink.shade50 : null),
                 cells: [
-                  DataCell(Text(member["Name"])),
-                  DataCell(Text(member["PhoneNo"])),
-                  DataCell(Text(member["Relation"])),
+                  DataCell(Text(member["Name"] ?? "")),
+                  DataCell(Text(member["PhoneNo"] ?? "")),
+                  DataCell(Text(member["Relation"] ?? "")),
                   DataCell(
                     IconButton(
                       icon: const Icon(Icons.delete, color: Colors.red),

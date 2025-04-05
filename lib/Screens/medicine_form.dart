@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:health_management/Authentication/auth_services.dart';
+import 'package:health_management/Authentication/backend.dart';
 import 'package:health_management/Screens/medicine_detail.dart';
 
 class MedicineFormPage extends StatefulWidget {
@@ -15,8 +17,21 @@ class MedicineFormPageState extends State<MedicineFormPage> {
   bool evening = false;
   bool night = false;
   String? foodTiming;
+  int? userId;
 
-  void _submitForm() {
+  @override
+  void didChangeDependencies() async {
+    super.didChangeDependencies();
+    final authService = AuthService();
+    final userInfo = await authService.getUserData();
+    if (userInfo != null) {
+      setState(() {
+        userId = userInfo['user_id'];
+      });
+    }
+  }
+
+  Future<void> _submitForm() async {
     if (_nameController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Please enter medicine name")),
@@ -24,17 +39,32 @@ class MedicineFormPageState extends State<MedicineFormPage> {
       return;
     }
 
+    if (userId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("User not found. Please login again.")),
+      );
+      return;
+    }
 
-    Navigator.pop(context, {
-      "MedicineName": _nameController.text,
-      "Morning": morning ? 1:0,
-      "Afternoon" : afternoon ? 1:0,
-      "Evening" : evening ? 1:0,
-      "Night" : night ? 1:0,
-      "IntakeTime": foodTiming ?? "Not Specified",
-    });
+    final medicineData = {
+      'user_id': userId,
+      'MedicineName': _nameController.text,
+      'Morning': morning ? 1 : 0,
+      'Afternoon': afternoon ? 1 : 0,
+      'Evening': evening ? 1 : 0,
+      'Night': night ? 1 : 0,
+      'IntakeTime': foodTiming ?? 'Not Specified',
+    };
+
+    await DBHelper().insertMedicine(medicineData);
+
+    if (mounted) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const MedicineDetailsPage()),
+      );
+    }
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -49,7 +79,7 @@ class MedicineFormPageState extends State<MedicineFormPage> {
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(
-                builder: (context) => MedicineDetailsPage(),
+                builder: (context) => const MedicineDetailsPage(),
               ),
             );
           },
@@ -70,7 +100,7 @@ class MedicineFormPageState extends State<MedicineFormPage> {
             ),
             const SizedBox(height: 20),
 
-            // Intake Time Checkboxes (Horizontal)
+            // Intake Time Checkboxes
             const Text("Intake Time", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -81,11 +111,10 @@ class MedicineFormPageState extends State<MedicineFormPage> {
                 CheckboxColumn(label: "Night", value: night, onChanged: (v) => setState(() => night = v)),
               ],
             ),
-
             const SizedBox(height: 20),
 
-            // Before Food / After Food Radio Buttons (Horizontal)
-            const Text("", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            // Before Food / After Food
+            const Text("Food Timing", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
@@ -93,7 +122,6 @@ class MedicineFormPageState extends State<MedicineFormPage> {
                 RadioRow(label: "After Food", value: "After Food", groupValue: foodTiming, onChanged: (v) => setState(() => foodTiming = v)),
               ],
             ),
-
             const SizedBox(height: 20),
 
             // Submit & Cancel Buttons
@@ -119,7 +147,6 @@ class MedicineFormPageState extends State<MedicineFormPage> {
   }
 }
 
-// Custom widget for checkboxes in a row
 class CheckboxColumn extends StatelessWidget {
   final String label;
   final bool value;
@@ -141,7 +168,6 @@ class CheckboxColumn extends StatelessWidget {
   }
 }
 
-// Custom widget for radio buttons in a row
 class RadioRow extends StatelessWidget {
   final String label;
   final String value;
