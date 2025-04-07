@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_reactive_ble/flutter_reactive_ble.dart';
 import 'package:health_management/Authentication/backend.dart';
 import 'package:health_management/Screens/home_page.dart';
+import 'package:health_management/Screens/signup.dart';
+import 'package:health_management/Screens/watch_connection.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class LoginPage extends StatefulWidget {
@@ -12,6 +15,9 @@ class LoginPage extends StatefulWidget {
 class LoginPageState extends State<LoginPage> {
   final TextEditingController _mobileController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+  bool isConnected = false;
+  late Stream<ConnectionStateUpdate> _connectionStream;
+  final FlutterReactiveBle _ble = FlutterReactiveBle();
 
   void _login() async {
     String mobile = _mobileController.text.trim();
@@ -24,20 +30,41 @@ class LoginPageState extends State<LoginPage> {
 
     final user = await DBHelper().getUserByMobile(mobile);
     if (user != null && user['Password'] == password) {
-      // Save session in SharedPreferences
       SharedPreferences prefs = await SharedPreferences.getInstance();
       await prefs.setInt('user_id', user['id']);
       await prefs.setString('UserName', user['UserName']);
       await prefs.setString('PhoneNo', user['PhoneNo']);
-      Navigator.pushReplacement(
+      isConnected == true ? Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => const HomePage()),
+      ) :
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const BluetoothScreen()),
       );
     } else {
-      _showMessage("Invalid credentials");
+      _showMessage("No user found");
     }
   }
 
+  Future<void> _checkConnection() async {
+    final prefs = await SharedPreferences.getInstance();
+    final deviceId = prefs.getString('device_id');
+    if (deviceId != null) {
+      _connectionStream = _ble.connectToDevice(id: deviceId);
+      _connectionStream.listen((update) {
+        if (update.connectionState == DeviceConnectionState.connected) {
+          setState(() => isConnected = true);
+        } else {
+          setState(() => isConnected = false);
+        }
+      }, onError: (e) {
+        setState(() => isConnected = false);
+      });
+    } else {
+      setState(() => isConnected = false);
+    }
+  }
   void _cancel() {
     _mobileController.clear();
     _passwordController.clear();
@@ -51,6 +78,7 @@ class LoginPageState extends State<LoginPage> {
 
   @override
   Widget build(BuildContext context) {
+    _checkConnection();
     return Scaffold(
       backgroundColor: Colors.white,
       body: Padding(
@@ -99,7 +127,10 @@ class LoginPageState extends State<LoginPage> {
                   const Text("Don't have an account?"),
                   TextButton(
                     onPressed: () {
-                      Navigator.pushReplacementNamed(context, "/signup");
+                      Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(builder: (context) => const SignUpPage()),
+                    );
                     },
                     child: const Text("Sign Up", style: TextStyle(color: Colors.pink)),
                   ),

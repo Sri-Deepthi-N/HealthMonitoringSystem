@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_reactive_ble/flutter_reactive_ble.dart';
 import 'package:health_management/Authentication/auth_services.dart';
 import 'package:health_management/Screens/login.dart';
-import 'package:health_management/Screens/signup.dart';
 import 'package:health_management/Notification/notification_services.dart';
 import 'package:health_management/Screens/home_page.dart';
+import 'package:health_management/Screens/watch_connection.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+final FlutterReactiveBle _ble = FlutterReactiveBle();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -27,82 +29,49 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> {
   final AuthService authService = AuthService();
+  bool isLoggedIn = false;
+  bool isConnected = false;
+  late Stream<ConnectionStateUpdate> _connectionStream;
 
   @override
   void didChangeDependencies() async {
     super.didChangeDependencies();
     await authService.getUserData();
+    isLoggedIn =widget.isLoggedIn;
+    _checkLoginAndConnection();
+  }
+
+  Future<void> _checkLoginAndConnection() async {
+    final prefs = await SharedPreferences.getInstance();
+    final deviceId = prefs.getString('device_id');
+    if (isLoggedIn && deviceId != null) {
+      _connectionStream = _ble.connectToDevice(id: deviceId);
+      _connectionStream.listen((update) {
+        if (update.connectionState == DeviceConnectionState.connected) {
+          setState(() => isConnected = true);
+        } else {
+          setState(() => isConnected = false);
+        }
+      }, onError: (e) {
+        setState(() => isConnected = false);
+      });
+    } else {
+      setState(() => isConnected = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    Widget screen;
+    if (!isLoggedIn) {
+      screen = const LoginPage();
+    } else if (isConnected) {
+      screen = const HomePage();
+    } else {
+      screen = const BluetoothScreen();
+    }
     return MaterialApp(
-      home: widget.isLoggedIn ? const HomePage() : const LoginPage(),
-      routes: {
-        '/login': (context) => const LoginPage(),
-        '/signup': (context) => const SignUpPage(),
-        '/home': (context) => HomePage(),
-      },
+      home: screen,
     );
   }
 }
-// import 'package:flutter/material.dart';
-// import 'package:flutter/services.dart';
-//
-// void main() {
-//   runApp(MyApp());
-// }
-//
-// class MyApp extends StatefulWidget {
-//   @override
-//   _MyAppState createState() => _MyAppState();
-// }
-//
-// class _MyAppState extends State<MyApp> {
-//   static const platform = MethodChannel('pebble_channel');
-//   String receivedData = "Waiting for Pebble health data...";
-//
-//   @override
-//   void initState() {
-//     super.initState();
-//     startListeningHealthData();
-//   }
-//
-//   Future<void> startListeningHealthData() async {
-//     try {
-//       final String result = await platform.invokeMethod('startListeningHealthData');
-//       print("Flutter1234: ${platform.name}");
-//
-//       // Listen for data from Android
-//       platform.setMethodCallHandler((call) async {
-//         if (call.method == "onHealthDataReceived") {
-//           setState(() {
-//             receivedData = call.arguments.toString();
-//           });
-//           print("Flutter: Received Pebble Data: $receivedData");
-//         }
-//       });
-//     } on PlatformException catch (e) {
-//       print("Flutter: Failed to start listening: '${e.message}'.");
-//     }
-//   }
-//
-//   @override
-//   Widget build(BuildContext context) {
-//     return MaterialApp(
-//       home: Scaffold(
-//         appBar: AppBar(title: Text("Pebble Health Data")),
-//         body: Center(
-//           child: Padding(
-//             padding: const EdgeInsets.all(16.0),
-//             child: Text(
-//               receivedData,
-//               textAlign: TextAlign.center,
-//               style: TextStyle(fontSize: 18),
-//             ),
-//           ),
-//         ),
-//       ),
-//     );
-//   }
-// }

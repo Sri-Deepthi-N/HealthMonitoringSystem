@@ -57,7 +57,10 @@ class _SignUpPageState extends State<SignUpPage> {
   }
 
   void _cancel() {
-    Navigator.pop(context);
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (context) => const LoginPage()),
+    );
   }
 
   void _showMessage(String msg) {
@@ -131,7 +134,10 @@ class _SignUpPageState extends State<SignUpPage> {
                   const Text("Already have an account?"),
                   TextButton(
                     onPressed: () {
-                      Navigator.pushReplacementNamed(context, "/login");
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(builder: (context) => const LoginPage()),
+                      );
                     },
                     child: const Text("Login", style: TextStyle(color: Colors.pink)),
                   ),
