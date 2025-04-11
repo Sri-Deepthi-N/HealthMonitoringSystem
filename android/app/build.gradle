@@ -46,8 +46,22 @@ android {
     }
 }
 dependencies {
+    // Google Sign-In and Fit APIs
+    constraints {
+        implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.8.0") {
+            because("kotlin-stdlib-jdk7 is now a part of kotlin-stdlib")
+        }
+        implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.8.0") {
+            because("kotlin-stdlib-jdk8 is now a part of kotlin-stdlib")
+        }
+    }
+    implementation("androidx.multidex:multidex:2.0.1")
+    implementation 'com.google.firebase:firebase-analytics-ktx'
+    implementation platform('com.google.firebase:firebase-bom:32.0.0')
+    implementation("com.google.android.gms:play-services-fitness:21.1.0")
+
+    apply plugin: 'com.google.gms.google-services'
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
-    implementation 'com.getpebble:pebblekit:3.1.0'
 }
 flutter {
     source = "../.."

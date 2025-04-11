@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:health_management/Screens/home_page.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class GoogleMapScreen extends StatefulWidget {
   const GoogleMapScreen({super.key});
@@ -21,15 +22,21 @@ class GoogleMapScreenState extends State<GoogleMapScreen> {
   }
 
   Future<void> _getUserLocation() async {
-    Position position = await Geolocator.getCurrentPosition(
-      locationSettings: LocationSettings(
-        accuracy: LocationAccuracy.best,
-      ),
-    );
-    _currentPosition = LatLng(position.latitude, position.longitude);
-       _mapController?.animateCamera(
-      CameraUpdate.newLatLngZoom(_currentPosition!, 14),
-    );
+    var status = await Permission.location.request();
+    if (status.isGranted) {
+      Position position = await Geolocator.getCurrentPosition(
+        locationSettings: LocationSettings(
+          accuracy: LocationAccuracy.best, // New recommended method
+        ),
+      );
+      setState(() {
+        _currentPosition = LatLng(position.latitude, position.longitude);
+      });
+
+      _mapController?.animateCamera(
+        CameraUpdate.newLatLngZoom(_currentPosition!, 14),
+      );
+    }
   }
 
   @override

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_reactive_ble/flutter_reactive_ble.dart';
@@ -20,6 +21,9 @@ class BluetoothScreenState extends State<BluetoothScreen> {
   String? _savedDeviceId;
   String? _savedDeviceName;
 
+  late final StreamSubscription<DiscoveredDevice> _scanSubscription;
+  StreamSubscription<ConnectionStateUpdate>? _connectionSubscription;
+
   @override
   void initState() {
     super.initState();
@@ -35,7 +39,8 @@ class BluetoothScreenState extends State<BluetoothScreen> {
   }
 
   void _startScan() {
-    _ble.scanForDevices(withServices: []).listen((device) {
+    _scanSubscription = _ble.scanForDevices(withServices: []).listen((device) {
+      if (!mounted) return;
       if (!_devices.any((d) => d.id == device.id) && device.name.isNotEmpty) {
         setState(() {
           _devices.add(device);
@@ -48,48 +53,78 @@ class BluetoothScreenState extends State<BluetoothScreen> {
     final prefs = await SharedPreferences.getInstance();
     _savedDeviceId = prefs.getString('device_id');
     _savedDeviceName = prefs.getString('device_name');
-    if (_savedDeviceId != null) {
-      _connectToDevice(_savedDeviceId!,_savedDeviceName!);
+    if (_savedDeviceId != null && _savedDeviceName != null) {
+      _connectToDevice(_savedDeviceId!, _savedDeviceName!);
     }
   }
 
   Future<void> _connectToDevice(String deviceId, String name) async {
-    _ble.connectToDevice(id: deviceId).listen((state) async {
-      if (state.connectionState == DeviceConnectionState.connected) {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('device_id', deviceId);
-        await prefs.setString('device_name', name);
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text("Connected to $name")));
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const HomePage()),
-        );
-      }
-    });
+    _connectionSubscription?.cancel(); // cancel previous connection if any
+    _connectionSubscription = _ble.connectToDevice(id: deviceId).listen(
+          (state) async {
+        if (!mounted) return;
+        if (state.connectionState == DeviceConnectionState.connected) {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('device_id', deviceId);
+          await prefs.setString('device_name', name);
+
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("Connected to $name")),
+          );
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const HomePage()),
+          );
+        }
+      },
+      onError: (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("Connection failed: $e")),
+          );
+        }
+      },
+    );
   }
 
   Future<void> _onDeviceTap(DiscoveredDevice device) async {
-    final isBonded = await platform.invokeMethod<bool>("isBonded", {"address": device.id});
+    final isBonded = await platform.invokeMethod<bool>(
+      "isBonded",
+      {"address": device.id},
+    );
+
     if (isBonded == true) {
-      _connectToDevice(device.id,device.name);
+      _connectToDevice(device.id, device.name);
     } else {
-      final result = await platform.invokeMethod("createBond", {"address": device.id});
+      final result = await platform.invokeMethod<bool>(
+        "createBond",
+        {"address": device.id},
+      );
       if (result == true) {
         _connectToDevice(device.id, device.name);
       } else {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text("Pairing failed")));
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Pairing failed")),
+          );
+        }
       }
     }
   }
 
+  @override
+  void dispose() {
+    _scanSubscription.cancel();
+    _connectionSubscription?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text("Bluetooth Devices"),
+        title: const Text("Bluetooth Devices"),
         backgroundColor: Colors.pinkAccent,
         foregroundColor: Colors.white,
       ),

@@ -4,6 +4,7 @@ import 'package:geocoding/geocoding.dart';
 import 'package:health_management/Screens/home_page.dart';
 import 'package:health_management/Screens/map.dart';
 import 'package:health_management/Screens/activity.dart';
+import 'package:health_management/Screens/google_fit.dart';
 
 class ActivityMonitoringPage extends StatefulWidget {
   const ActivityMonitoringPage({super.key});
@@ -15,6 +16,15 @@ class ActivityMonitoringPage extends StatefulWidget {
 class ActivityMonitoringPageState extends State<ActivityMonitoringPage> {
   String? _address;
   bool _isLoading = true;
+  final GoogleFitService _googleFitService = GoogleFitService();
+  bool isLoading = false;
+  String? errorMessage;
+  Map<String, String?> healthData = {
+    "Steps Taken": null,
+    "Calories Burned": null,
+    "Distance Travelled" : null,
+  };
+
 
   Future<void> _getCurrentLocation() async {
     try {
@@ -48,10 +58,51 @@ class ActivityMonitoringPageState extends State<ActivityMonitoringPage> {
     }
   }
 
+  Future<void> _fetchHealthData() async {
+    if (isLoading) return;
+
+    setState(() {
+      isLoading = true;
+      errorMessage = null;
+    });
+
+    try {
+      final accessToken = await _googleFitService.getAccessToken();
+      if (accessToken == null) {
+        setState(() {
+          errorMessage = 'Please sign in with Google to access health data';
+        });
+        return;
+      }
+
+      final results = await Future.wait([
+        _googleFitService.getSteps(accessToken,'daily'),
+        _googleFitService.getCaloriesBurned(accessToken, 'daily'),
+        _googleFitService.getDistance(accessToken, 'daily'),
+      ]);
+
+      setState(() {
+        healthData = {
+          "Steps Taken": results[0],
+          "Calories Burned": results[1],
+          "Distance Travelled" : results[2],
+        };
+      });
+    } catch (e) {
+      setState(() {
+        errorMessage = 'Failed to load health data: ${e.toString()}';
+      });
+    } finally {
+      setState(() {
+        isLoading = false;
+      });
+    }
+  }
   @override
   void initState() {
     super.initState();
     _getCurrentLocation();
+    _fetchHealthData();
   }
 
   @override
@@ -83,13 +134,13 @@ class ActivityMonitoringPageState extends State<ActivityMonitoringPage> {
               context,
               icon: Icons.directions_walk,
               title: "Steps Taken",
-              value: "5000",
+              value: healthData["Steps Taken"] ?? "No Data",
               iconColor: Colors.brown,
               onTap: () {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => const HealthParametersPage(),
+                    builder: (context) => const ActivityPage(title: "Steps Taken"),
                   ),
                 );
               },
@@ -98,17 +149,31 @@ class ActivityMonitoringPageState extends State<ActivityMonitoringPage> {
               context,
               icon: Icons.local_fire_department,
               title: "Calories Burned",
-              value: "250 kcal",
+              value: healthData["Calories Burned"] ?? "No Data",
               iconColor: Colors.orangeAccent,
-              onTap: () {},
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const ActivityPage(title: "Calories Burned"),
+                  ),
+                );
+              },
             ),
             _buildActivityCard(
               context,
               icon: Icons.directions_run,
               title: "Distance Traveled",
-              value: "3.5 km",
+              value: healthData["Distance Travelled"] ?? "No Data",
               iconColor: Colors.purple,
-              onTap: () {},
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const ActivityPage(title: "Distance Traveled"),
+                  ),
+                );
+              },
             ),
             _buildActivityCard(
               context,

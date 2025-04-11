@@ -1,3 +1,4 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_reactive_ble/flutter_reactive_ble.dart';
 import 'package:health_management/Authentication/auth_services.dart';
@@ -7,12 +8,13 @@ import 'package:health_management/Screens/home_page.dart';
 import 'package:health_management/Screens/watch_connection.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+
 final FlutterReactiveBle _ble = FlutterReactiveBle();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp();
   await NotificationService.initialize();
-
   SharedPreferences prefs = await SharedPreferences.getInstance();
   bool isLoggedIn = prefs.containsKey('user_id');
   runApp(MyApp(isLoggedIn: isLoggedIn)

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_reactive_ble/flutter_reactive_ble.dart';
+import 'package:health_management/Screens/google_fit.dart';
 import 'package:health_management/Screens/watch_connection.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:health_management/Authentication/auth_services.dart';
@@ -14,7 +15,6 @@ import 'package:health_management/Screens/map.dart';
 import 'package:health_management/Screens/medical_details.dart';
 import 'package:health_management/Screens/medicine_detail.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:convert';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -24,11 +24,16 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  final FlutterReactiveBle _ble = FlutterReactiveBle();
   final flutterReactiveBle = FlutterReactiveBle();
   List<DiscoveredDevice> devices = [];
   String username = "user";
   bool isConnected = false;
+  final GoogleFitService _googleFitService = GoogleFitService();
+  Timer? refreshTimer;
+  bool isLoading = false;
+  String? errorMessage;
+  String userId = "";
+  String? deviceId;
 
   Map<String, String?> healthData = {
     "BP Level": null,
@@ -38,16 +43,9 @@ class _HomePageState extends State<HomePage> {
     "SpO2 Level": null,
     "Steps Taken": null,
     "Calories Burned": null,
-    "Respiration Rate": null,
-    "Hydration Level": null,
     "Blood Glucose": null,
-    "Stress Level": null,
+    "Distance Travelled" : null,
   };
-
-
-  void signOutUser(BuildContext context) {
-    AuthService().signOut(context);
-  }
 
   @override
   void didChangeDependencies() async {
@@ -55,58 +53,33 @@ class _HomePageState extends State<HomePage> {
     await _requestPermissions();
     await _checkConnection();
     _loadUserData();
+    _startAutoRefresh();
+  }
+
+  @override
+  void dispose() {
+    refreshTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _requestPermissions() async {
+    await Permission.notification.request();
+    await Permission.activityRecognition.request();
+    await Permission.sensors.request();
+    await Permission.location.request();
+    await Permission.scheduleExactAlarm.request();
   }
 
   Future<void> _checkConnection() async {
     final prefs = await SharedPreferences.getInstance();
     final savedId = prefs.getString('device_id');
+    deviceId = savedId;
     if (savedId == null) {
       setState(() => isConnected = false);
       return;
     }
     else {
       setState(() => isConnected = true);
-      await _readSmartwatchData(savedId);
-
-    }
-  }
-
-  Future<void> _readSmartwatchData(String deviceId) async {
-    final characteristicMap = {
-      '0000ae42-0000-1000-8000-00805f9b34fb': 'HeartRate',
-      'f0020002-0451-4000-b000-000000000000': 'BloodPressure',
-      'f0030002-0451-4000-b000-000000000000': 'SpO2',
-      'f0080002-0451-4000-b000-000000000000': 'Temperature',
-      '0000fec8-0000-1000-8000-00805f9b34fb': 'Steps',
-    };
-    final services = await _ble.discoverServices(deviceId);
-
-    for (final service in services) {
-      for (final char in service.characteristics) {
-        final uuid = char.characteristicId;
-
-        if (characteristicMap.containsKey(uuid)) {
-          final keyName = characteristicMap[uuid]!;
-
-          try {
-            await _ble.subscribeToCharacteristic(
-              QualifiedCharacteristic(
-                characteristicId: char.characteristicId,
-                serviceId: char.serviceId,
-                deviceId: deviceId,
-              ),
-            ).listen((value) {
-              final hex = value.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ');
-              final stringValue = utf8.decode(value, allowMalformed: true);
-              print("✅ $keyName -> $hex | $stringValue");
-              print("Char123 $characteristicMap");
-
-            });
-          } catch (e) {
-            print("❌ Could not subscribe to $keyName: $e");
-          }
-        }
-      }
     }
   }
 
@@ -122,12 +95,69 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  String userId = "";
+  void signOutUser(BuildContext context) {
+    AuthService().signOut(context);
+  }
 
-  Future<void> _requestPermissions() async {
-    await Permission.notification.request();
-    await Permission.scheduleExactAlarm.request();
+  void _startAutoRefresh() {
+    _fetchHealthData();
+    refreshTimer = Timer.periodic(const Duration(minutes: 1), (timer) {
+      _fetchHealthData();
+    });
+  }
 
+
+  Future<void> _fetchHealthData() async {
+    if (isLoading) return;
+
+    setState(() {
+      isLoading = true;
+      errorMessage = null;
+    });
+
+    try {
+      final accessToken = await _googleFitService.getAccessToken();
+      if (accessToken == null) {
+        setState(() {
+          errorMessage = 'Please sign in with Google to access health data';
+        });
+        return;
+      }
+
+      final results = await Future.wait([
+        _googleFitService.getSteps(accessToken,'daily'),
+        _googleFitService.getHeartRate(accessToken, 'daily'),
+        _googleFitService.getBloodPressure(accessToken, 'daily'),
+        _googleFitService.getSleepData(accessToken, 'daily'),
+        _googleFitService.getBodyTemperature(accessToken, 'daily'),
+        _googleFitService.getOxygenSaturation(accessToken, 'daily'),
+        _googleFitService.getCaloriesBurned(accessToken, 'daily'),
+        _googleFitService.getBloodGlucose(accessToken, 'daily'),
+        _googleFitService.getDistance(accessToken, 'daily'),
+      ]);
+
+      setState(() {
+        healthData = {
+          "BP Level": results[2],
+          "Heart Rate": results[1],
+          "Sleep Quality": results[3],
+          "Body Temperature": results[4],
+          "SpO2 Level": results[5],
+          "Steps Taken": results[0],
+          "Calories Burned": results[6],
+          "Blood Glucose": results[7],
+          "Distance Travelled" : results[8],
+        };
+      });
+    } catch (e) {
+      setState(() {
+        errorMessage = 'Failed to load health data: ${e.toString()}';
+      });
+    } finally {
+      setState(() {
+        isLoading = false;
+      });
+    }
   }
 
   @override
@@ -149,18 +179,18 @@ class _HomePageState extends State<HomePage> {
           if (isConnected == true)
             IconButton(
               icon: const Icon(Icons.watch_off, color: Colors.white),
-              onPressed: (){},
+              onPressed: () {},
             ),
           if (isConnected == false)
-          IconButton(
-            icon: const Icon(Icons.watch_rounded, color: Colors.white),
-            onPressed: (){
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (context) => BluetoothScreen()),
-              );
-            },
-          ),
+            IconButton(
+              icon: const Icon(Icons.watch_rounded, color: Colors.white),
+              onPressed: () {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (context) => BluetoothScreen()),
+                );
+              },
+            ),
           IconButton(
             icon: const Icon(Icons.location_on, color: Colors.white),
             onPressed: () {
@@ -214,25 +244,29 @@ class _HomePageState extends State<HomePage> {
             _buildDrawerItem(Icons.monitor_heart, "Activity Monitoring", () {
               Navigator.pushReplacement(
                 context,
-                MaterialPageRoute(builder: (context) => const ActivityMonitoringPage()),
+                MaterialPageRoute(
+                    builder: (context) => const ActivityMonitoringPage()),
               );
             }),
             _buildDrawerItem(Icons.family_restroom, "Family Details", () {
               Navigator.pushReplacement(
                 context,
-                MaterialPageRoute(builder: (context) => const FamilyDetailsPage()),
+                MaterialPageRoute(
+                    builder: (context) => const FamilyDetailsPage()),
               );
             }),
             _buildDrawerItem(Icons.local_hospital, "Doctor Details", () {
               Navigator.pushReplacement(
                 context,
-                MaterialPageRoute(builder: (context) => const DoctorDetailsPage()),
+                MaterialPageRoute(
+                    builder: (context) => const DoctorDetailsPage()),
               );
             }),
             _buildDrawerItem(Icons.medication, "Medicine Details", () {
               Navigator.pushReplacement(
                 context,
-                MaterialPageRoute(builder: (context) => const MedicineDetailsPage()),
+                MaterialPageRoute(
+                    builder: (context) => const MedicineDetailsPage()),
               );
             }),
             _buildDrawerItem(Icons.track_changes, "Habit", () {
@@ -260,99 +294,87 @@ class _HomePageState extends State<HomePage> {
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 10),
+
+            if (isLoading)
+              const LinearProgressIndicator(),
+
+            if (errorMessage != null)
+              Text(
+                errorMessage!,
+                style: const TextStyle(color: Colors.red),
+              ),
+
             Expanded(
               child: Scrollbar(
                 thumbVisibility: true,
-                child: ListView(
-                  children: [
-                    _buildHealthParameter(
-                      "BP Level", "120/80 mmHg", Icons.favorite, Colors.red, () {
-                        Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(builder: (context) => const HealthParametersPage()),
-                        );
-                      }),
-                    _buildHealthParameter(
-                      "Heart Rate", "72 bpm", Icons.monitor_heart, Colors.blue,() {
-                        Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(builder: (context) => const HealthParametersPage()),
-                        );
-                      }
-                    ),
-                    _buildHealthParameter(
-                      "Sleep Quality", "Good (7.5 hrs)", Icons.bedtime, Colors.purple,() {
-                        Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(builder: (context) => const HealthParametersPage()),
-                        );
-                      }
-                    ),
-                    _buildHealthParameter(
-                      "Body Temperature", "98.6°F", Icons.thermostat, Colors.orange,() {
-                        Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(builder: (context) => const HealthParametersPage()),
-                        );
-                      }
-                    ),
-                    _buildHealthParameter(
-                      "SpO2 Level", "98%", Icons.air, Colors.green,() {
-                        Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(builder: (context) => const HealthParametersPage()),
-                        );
-                      }
-                    ),
-                    _buildHealthParameter(
-                      "Steps Taken", "5,420 steps", Icons.directions_walk, Colors.brown,() {
-                        Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(builder: (context) => const HealthParametersPage()),
-                        );
-                      }
-                    ),
-                    _buildHealthParameter(
-                      "Calories Burned", "320 kcal", Icons.local_fire_department, Colors.redAccent,() {
-                        Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(builder: (context) => const HealthParametersPage()),
-                        );
-                      }
-                    ),
-                    _buildHealthParameter(
-                      "Respiration Rate", "16 breaths/min", Icons.air, Colors.teal,() {
-                        Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(builder: (context) => const HealthParametersPage()),
-                        );
-                      }
-                    ),
-                    _buildHealthParameter(
-                      "Hydration Level", "75%", Icons.local_drink, Colors.cyan,() {
-                        Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(builder: (context) => const HealthParametersPage()),
-                        );
-                      }
-                    ),
-                    _buildHealthParameter(
-                      "Blood Glucose", "95 mg/dL", Icons.bloodtype, Colors.deepOrange,() {
-                        Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(builder: (context) => const HealthParametersPage()),
-                        );
-                      }
-                    ),
-                    _buildHealthParameter(""
-                      "Stress Level", "Moderate", Icons.sentiment_neutral, Colors.grey,() {
-                        Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(builder: (context) => const HealthParametersPage()),
-                        );
-                      }
-                    ),
-                  ],
+                child: RefreshIndicator(
+                  onRefresh: _fetchHealthData,
+                  child: ListView(
+                    children: [
+                      _buildHealthParameter(
+                          "BP Level",
+                          healthData["BP Level"] ?? "No data",
+                          Icons.favorite,
+                          Colors.red,
+                              () => _navigateToHealthDetails("BP Level")
+                      ),
+                      _buildHealthParameter(
+                          "Heart Rate",
+                          healthData["Heart Rate"] ?? "No data",
+                          Icons.monitor_heart,
+                          Colors.blue,
+                              () => _navigateToHealthDetails("Heart Rate")
+                      ),
+                      _buildHealthParameter(
+                          "Sleep Quality",
+                          healthData["Sleep Quality"] ?? "No data",
+                          Icons.bedtime,
+                          Colors.purple,
+                              () => _navigateToHealthDetails("Sleep Quality")
+                      ),
+                      _buildHealthParameter(
+                          "Body Temperature",
+                          healthData["Body Temperature"] ?? "No data",
+                          Icons.thermostat,
+                          Colors.orange,() => _navigateToHealthDetails("Body Temperature")
+                      ),
+                      _buildHealthParameter(
+                          "SpO2 Level",
+                          healthData["SpO2 Level"] ?? "No data",
+                          Icons.air,
+                          Colors.green,
+                              () => _navigateToHealthDetails("SpO2 Level")
+                      ),
+                      _buildHealthParameter(
+                          "Steps Taken",
+                          healthData["Steps Taken"] ?? "No data",
+                          Icons.directions_walk,
+                          Colors.brown,
+                              () => _navigateToHealthDetails("Steps Taken")
+                      ),
+                      _buildHealthParameter(
+                          "Calories Burned",
+                          healthData["Calories Burned"] ?? "No data",
+                          Icons.local_fire_department,
+                          Colors.redAccent,
+                              () => _navigateToHealthDetails("Calories Burned")
+                      ),
+                      _buildHealthParameter(
+                          "Distance Travelled",
+                          healthData["Distance Travelled"] ?? "No data",
+                          Icons.directions_run,
+                          Colors.purple,
+                              () => _navigateToHealthDetails("Distance Travelled")
+                      ),
+                      _buildHealthParameter(
+                          "Blood Glucose",
+                          healthData["Blood Glucose"] ?? "No data",
+                          Icons.bloodtype,
+                          Colors.deepOrange,
+                              () => _navigateToHealthDetails("Blood Glucose")
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -362,12 +384,21 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  void _navigateToHealthDetails(String parameter) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ActivityPage(title: parameter),
+      ),
+    );
+  }
   void _showProfileLogoutOptions(BuildContext context) {
     final RenderBox appBarBox = context.findRenderObject() as RenderBox;
     final Offset position = appBarBox.localToGlobal(Offset.zero);
     showMenu(
       context: context,
-      position: RelativeRect.fromLTRB(position.dx + appBarBox.size.width - 50, position.dy + 50, 0, 0),
+      position: RelativeRect.fromLTRB(
+          position.dx + appBarBox.size.width - 50, position.dy + 50, 0, 0),
       items: [
         PopupMenuItem(
           child: const Text("My Profile"),
@@ -391,7 +422,8 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildHealthParameter(String title, String value, IconData icon, Color iconColor, VoidCallback onTap) {
+  Widget _buildHealthParameter(String title, String value, IconData icon,
+      Color iconColor, VoidCallback onTap) {
     return Card(
       elevation: 3,
       margin: const EdgeInsets.symmetric(vertical: 8),
