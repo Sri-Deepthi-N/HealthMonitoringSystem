@@ -13,7 +13,7 @@ final FlutterReactiveBle _ble = FlutterReactiveBle();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  //await Firebase.initializeApp();
+  await Firebase.initializeApp();
   await NotificationService.initialize();
   SharedPreferences prefs = await SharedPreferences.getInstance();
   bool isLoggedIn = prefs.containsKey('user_id');

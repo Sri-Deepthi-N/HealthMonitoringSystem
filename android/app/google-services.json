@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "728540480613",
+    "project_id": "shms-d96ba",
+    "storage_bucket": "shms-d96ba.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:728540480613:android:9823ac68ac18052b02328c",
+        "android_client_info": {
+          "package_name": "com.project.health_management"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "728540480613-h65fhbl585gafbh11m37mos1c3bo5qht.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDrJejno-hMeDIGw5Op-XSHBoYMd8RjeQo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "728540480613-h65fhbl585gafbh11m37mos1c3bo5qht.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "728540480613-9hjn6bbtvs3c7tbeqaqetbhpb4gkm911.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.project.healthManagement"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

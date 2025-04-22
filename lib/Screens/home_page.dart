@@ -149,7 +149,8 @@ class _HomePageState extends State<HomePage> {
 
       // Save to DB
       await _addHealth({"value": results[1], "date": date, "time": time}, "HeartRate");
-      await _addHealth({"systolic": results[2].split("/"), "diastolic": results[2].split("/"), "date": date, "time": time}, "BPLevel");
+      List<String> bp = results[2].split("/");
+      await _addHealth({"systolic": bp[0].trim(), "diastolic": bp[1].replaceAll(RegExp(r'[^0-9]'), '').trim(), "date": date, "time": time}, "BPLevel");
       await _addHealth({"quality": results[3], "date": date, "time": time}, "SleepQuality");
       await _addHealth({"value": results[4], "date": date, "time": time}, "BodyTemperature");
       await _addHealth({"percentage": results[5], "date": date, "time": time}, "SpO2Level");
