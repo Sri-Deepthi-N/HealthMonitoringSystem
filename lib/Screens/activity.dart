@@ -227,7 +227,7 @@ class _ActivityPageState extends State<ActivityPage> {
     if (healthDataFromDB.isEmpty) return [];
 
     final now = DateTime.now();
-    // Map weekIndex (0=days 1–7, 1=8–14, 2=15–21, 3=22–end) → latest entry
+
     final Map<int, Map<String, dynamic>> latestPerWeek = {};
 
     for (var entry in healthDataFromDB) {
@@ -239,7 +239,6 @@ class _ActivityPageState extends State<ActivityPage> {
       }
     }
 
-    // Build exactly 4 spots: x=0,1,2,3 for Week 1–4
     return List.generate(4, (i) {
       if (latestPerWeek.containsKey(i)) {
         final entry = latestPerWeek[i]!;

@@ -100,7 +100,7 @@ class MedicalHistoryPageState extends State<MedicalHistoryPage> {
           IconButton(
             icon: const Icon(Icons.add),
             onPressed: () async {
-              final newHistory = await Navigator.pushReplacement(
+              final newHistory = await Navigator.push(
                 context,
                 MaterialPageRoute(builder: (context) => const HealthDetailsFormPage()),
               );
